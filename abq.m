@@ -38,8 +38,11 @@ typedef struct
     const char *label;
     NSString *property;
     int abType;
+    int labelWidth;
+    // int valueWidth;
     union 
     {
+        id generic;
         NSString *string;
         ABMultiValue *multi;
         NSDate *date;
@@ -106,6 +109,7 @@ void init(Field *field, NSString **addressKey)
     for (int i=0; i<numElts(fieldInit); i++, field++)
     {
         *field = fieldInit[i];
+        field->labelWidth = strlen(field->label);
     }
 
     NSString *addressInit[] =
@@ -149,6 +153,52 @@ const char *str(NSString *ns)
     return (s) ? s : "";
 }
 
+/* 
+ * Allocate and return a cleaned up label
+ * Labels come out of AB like this: _$!<Work>!$_ 
+ */
+const char *cleanLabel(const char *label)
+{
+    const char *kind;
+
+    const char *start = index(label, '<');
+    const char *end = rindex(label, '>');
+    if (start && end && end > start)
+    {
+        kind = strndup(start+1, end-start-1);
+    } else {
+        kind = strdup(label);
+    }
+
+    return kind;
+}
+
+/*
+ * Print a multi-line value, label for first line is already printed
+ */
+void printNote(int labelWidth, const char *note)
+{
+    Boolean first = true;
+    int length, offset;
+
+    const char *end = note + strlen(note);
+    while (note < end)
+    {
+        if (!first)
+        {
+            printf("%*s: ", labelWidth, "");
+        }
+        
+        length = strlen(note);
+        offset = strcspn(note, "\r\n");
+
+        printf("%.*s\n", offset, note);
+        note += offset;
+        note++;
+        first = false;
+    }
+}
+
 // convenience method to extract proper C string from NSDictionary
 const char *keyFrom(id value, NSString *key)
 {
@@ -166,88 +216,87 @@ void display(ABPerson *person)
         return;
     }
 
+    /* find widest label of non-null values */
+    int labelWidth = 0;
     for (unsigned int i=0; i<numFields; i++)
     {
-        id value = [person valueForProperty:field[i].property];
-        if (value)
+        field[i].value.generic = [person valueForProperty:field[i].property];
+        if (field[i].value.generic && field[i].labelWidth > labelWidth)
         {
-            switch (field[i].abType)
-            {
-                case kABStringProperty:
-                    field[i].value.string = value;
-                    printf("%s: %s\n", 
-                            field[i].label, str(field[i].value.string));
-                    break;
-                case kABDateProperty:
-                    field[i].value.date = value;
-                    printf("%s: %s\n", 
-                            field[i].label, 
-                            str([field[i].value.date 
-                                 descriptionWithCalendarFormat: @"%A, %B %e, %Y"
-                                 timeZone: nil locale: nil]));
-                    break;
-                case kABMultiStringProperty:
-                    field[i].value.multi = value;
-                    unsigned int count = [field[i].value.multi count];
-                    for (unsigned int j = 0; j < count; j++) 
-                    {
-                        const char *value = str([field[i].value.multi 
-                                                    valueAtIndex:j]);
-                        const char *label = str([field[i].value.multi 
-                                                    labelAtIndex:j]);
+            labelWidth = field[i].labelWidth;
+        }
+    }
 
-                        const char *kind;
-                        /* labels come out of AB like this: _$!<Work>!$_ */
-                        char *start = index(label, '<');
-                        char *end = rindex(label, '>');
-                        if (start && end && end > start)
-                        {
-                            kind = strndup(start+1, end-start-1);
-                        } else {
-                            kind = label;
-                        }
-                        printf("%s: %s (%s)\n", field[i].label, value, kind);
-                        if (kind != label)
-                        {
-                            free((void *)kind);
-                        }
-                    }
-                    break;
-                case kABMultiDictionaryProperty:
-                    field[i].value.multi = value;
-                    count = [field[i].value.multi count];
-                    for (unsigned int j = 0; j < count; j++) 
-                    {
-                        NSDictionary *value = [field[i].value.multi 
-                                                    valueAtIndex:j];
-                        const char *label = str([field[i].value.multi 
-                                                    labelAtIndex:j]);
+    /* print non-null fields */
+    for (unsigned int i=0; i<numFields; i++)
+    {
+        if (!field[i].value.generic)                 // skip if empty
+        {
+            continue;
+        }
 
-                        const char *kind;
-                        /* labels come out of AB like this: _$!<Work>!$_ */
-                        const char *start = index(label, '<');
-                        const char *end = rindex(label, '>');
-                        if (start && end && end > start)
-                        {
-                            kind = strndup(start+1, end-start-1);
-                        } else {
-                            kind = label;
-                        }
-                        printf("%s: %s, %s %s %s (%s)\n", field[i].label, 
-                                str([value objectForKey: kABAddressStreetKey]),
-                                str([value objectForKey: kABAddressCityKey]),
-                                str([value objectForKey: kABAddressStateKey]),
-                                str([value objectForKey: kABAddressZIPKey]),
-                                kind);
-                        if (kind != label)
-                        {
-                            free((void *)kind);
-                        }
+        printf("%*s: ", labelWidth, field[i].label); // label on 1st line only
+
+        switch (field[i].abType)
+        {
+            unsigned int count;
+
+            case kABStringProperty:
+                if (field[i].property == kABNoteProperty)  // multi-line string
+                {                                   
+                    printNote(labelWidth, str(field[i].value.string));
+                } else {                                   // simple string
+                    printf("%s\n", str(field[i].value.string));
+                }
+                break;
+            case kABDateProperty:
+                printf("%s\n", str([field[i].value.date 
+                             descriptionWithCalendarFormat: @"%A, %B %e, %Y"
+                             timeZone: nil locale: nil]));
+                break;
+            case kABMultiStringProperty:
+                count = [field[i].value.multi count];
+                for (unsigned int j = 0; j < count; j++) 
+                {
+                    const char *value = str([field[i].value.multi 
+                                                        valueAtIndex:j]);
+                    const char *kind = str([field[i].value.multi 
+                                                        labelAtIndex:j]);
+
+                    kind = cleanLabel(kind);  // returns a duplicate, must free
+                    if (j != 0)               // multiple values
+                    {
+                        printf("%*s: ", labelWidth, "");
                     }
-                    break;
-                default:
-                    break;
-            }
+                    printf("%s (%s)\n", value, kind);
+                    free((void *)kind);
+                }
+                break;
+            case kABMultiDictionaryProperty:
+                count = [field[i].value.multi count];
+                for (unsigned int j = 0; j < count; j++) 
+                {
+                    NSDictionary *value = [field[i].value.multi 
+                                                        valueAtIndex:j];
+                    const char *kind = str([field[i].value.multi 
+                                                        labelAtIndex:j]);
+
+                    kind = cleanLabel(kind);  // returns a duplicate
+                    if (j != 0)
+                    {
+                        printf("%*s: ", labelWidth, "");
+                    }
+                    printf("%s, %s %s %s (%s)\n", 
+                            str([value objectForKey: kABAddressStreetKey]),
+                            str([value objectForKey: kABAddressCityKey]),
+                            str([value objectForKey: kABAddressStateKey]),
+                            str([value objectForKey: kABAddressZIPKey]),
+                            kind);
+                    free((void *)kind);
+                }
+                break;
+            default:
+                break;
         }
     }
     printf("\n");
