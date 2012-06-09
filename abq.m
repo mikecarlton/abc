@@ -18,11 +18,22 @@
 #define numElts(array) (sizeof(array)/sizeof(*array))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
+#define plural(n) ((n) == 1 ? "" : "s")
+#define eplural(n) ((n) == 1 ? "" : "es")
 
-Boolean emailGui = false;
-Boolean abGui = false;
-Boolean edit = false;
-Boolean raw = false;
+Boolean emailGui = false;   // open gui email?
+Boolean abGui = false;      // open gui address book?
+Boolean edit = false;       // gui adderss book in edit mode?
+
+Boolean raw = false;        // display records in raw format?
+
+typedef enum {
+    filterNone,
+    filterHome,
+    filterWork
+} Filter;
+
+Filter filter = filterNone; // filter search/choose values?
 
 /* 
  * Field names defined in 
@@ -341,6 +352,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
             [searchRecord addObject: 
                 [ABPerson searchElementForProperty:field[j].property
                     label:nil       /* use this to filter Home v. Work */
+                    //label:kABAddressHomeLabel
                     key:nil
                     value:key
                     comparison:kABContainsSubStringCaseInsensitive]];
@@ -380,11 +392,6 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 }
 
 /*
-    open O
-    edit E
-    display filters:
-        home H
-        work W
     search filters:
         first F 
         first L 
@@ -392,7 +399,6 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
         email M
         city C
         street S
-    raw r [description]
     display type:
         short
         normal
@@ -412,6 +418,8 @@ usage(char *name)
       "  -O    open Address Book, showing first match",
       "  -E    open Address Book, editing first match",
       "  -M    open email application, sending to primary email of match",
+      "  -H    filter search and use home values for gui",
+      "  -W    filter search and use work values for gui",
       "  -r    display records in raw form",
     };
 
@@ -431,7 +439,7 @@ int main(int argc, char * const argv[])
         char *programName = argv[0];
 
         int opt;
-        while ((opt = getopt(argc, argv, ":hOEMr")) > 0) 
+        while ((opt = getopt(argc, argv, ":hOEMHWr")) > 0) 
         {
             switch (opt) 
             {
@@ -446,6 +454,12 @@ int main(int argc, char * const argv[])
                     break;
                 case 'M':
                     emailGui = true;
+                    break;
+                case 'H':
+                    filter = filterHome;
+                    break;
+                case 'w':
+                    filter = filterWork;
                     break;
                 case 'r':
                     raw = true;
@@ -489,6 +503,9 @@ int main(int argc, char * const argv[])
                 break;
             }
         }
+
+        unsigned long numResults = [results count];
+        printf("%lu match%s\n", numResults, eplural(numResults));
     }
 
     return 0;
