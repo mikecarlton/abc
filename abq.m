@@ -22,10 +22,12 @@
 #define eplural(n) ((n) == 1 ? "" : "es")
 
 Boolean emailGui = false;   // open gui email?
+Boolean mapGui = false;     // open gui map?
 Boolean abGui = false;      // open gui address book?
-Boolean edit = false;       // gui adderss book in edit mode?
+Boolean edit = false;       // gui address book in edit mode?
 
 Boolean raw = false;        // display records in raw format?
+Boolean uid = false;        // display records with uid?
 
 typedef enum {
     filterNone,
@@ -33,7 +35,7 @@ typedef enum {
     filterWork
 } Filter;
 
-Filter filter = filterNone; // filter search/choose values?
+Filter label = filterNone;  // filter search/choose values?
 
 /* 
  * Field names defined in 
@@ -67,6 +69,7 @@ enum
     lastname,
     nickname,
     maidenname,
+    finalname = maidenname,     // mark final name
     birthday,
     organization,
     jobtitle,
@@ -174,7 +177,8 @@ void openInAddressBook(ABPerson *person, Boolean edit)
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlString]];
 }
 
-const char *str(NSString *ns)
+const char 
+*str(NSString *ns)
 {
     const char *s;
 
@@ -236,6 +240,15 @@ void printNote(int labelWidth, const char *note)
 const char *keyFrom(id value, NSString *key)
 {
     return str([value objectForKey: key]);
+}
+
+/*
+ * Allocate and return a formatted name
+ */
+char *
+formattedName(ABPerson *person)
+{
+    return "";
 }
 
 /*
@@ -332,6 +345,14 @@ void display(ABPerson *person)
                 break;
         }
     }
+
+    if (uid)
+    {
+        const char *uidStr = str([person valueForProperty:kABUIDProperty]);
+        printf("%*s: %.*s\n", labelWidth, "UID", 
+               rindex(uidStr, ':') - uidStr, uidStr);
+    }
+
     printf("\n");
 }
 
@@ -404,23 +425,27 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
         normal
         long
     limit n <arg>
+    interactive i
  */
 
 /*
  * Summarize program usage 
  */
+static const char *options = ":hAEMHWur";
+
 static void 
 usage(char *name)
 {
     int i;
     static char *help[] = {
       "  -h    this help",
-      "  -O    open Address Book, showing first match",
-      "  -E    open Address Book, editing first match",
-      "  -M    open email application, sending to primary email of match",
-      "  -H    filter search and use home values for gui",
-      "  -W    filter search and use work values for gui",
-      "  -r    display records in raw form",
+      "  -A        open Address Book with person",
+      "  -E        open email application with message for person",
+      "  -M        open map application wiht address of person",
+      "  -H        use 'home' values for gui",
+      "  -W        use 'work' values for gui",
+      "  -u [id]   display unique ids; search for id if present",
+      "  -r        display records in raw form",
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
@@ -439,30 +464,32 @@ int main(int argc, char * const argv[])
         char *programName = argv[0];
 
         int opt;
-        while ((opt = getopt(argc, argv, ":hOEMHWr")) > 0) 
+        while ((opt = getopt(argc, argv, options)) > 0) 
         {
             switch (opt) 
             {
-                case 'O':
+                case 'A':
                     // nw.name = optarg;
                     abGui = true;
                     edit = false;
                     break;
                 case 'E':
-                    abGui = true;
-                    edit = true;
-                    break;
-                case 'M':
                     emailGui = true;
                     break;
-                case 'H':
-                    filter = filterHome;
+                case 'M':
+                    mapGui = true;
                     break;
-                case 'w':
-                    filter = filterWork;
+                case 'H':
+                    label = filterHome;
+                    break;
+                case 'W':
+                    label = filterWork;
                     break;
                 case 'r':
                     raw = true;
+                    break;
+                case 'u':
+                    uid = true;
                     break;
                 case 'h':
                 default:
