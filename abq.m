@@ -6,8 +6,7 @@
  * http://www.opensource.org/licenses/mit-license.php
  *
  * build: 
- * clang -framework Foundation -framework AddressBook -framework AppKit \
- *       -Wall -o abq abq.m
+ * clang -framework Foundation -framework AddressBook -framework AppKit -Wall -o abq abq.m
  */
 
 #import <Foundation/Foundation.h>
@@ -20,7 +19,8 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-Boolean gui = false;
+Boolean emailGui = false;
+Boolean abGui = false;
 Boolean edit = false;
 Boolean raw = false;
 
@@ -125,6 +125,28 @@ void init(Field *field, NSString **addressKey)
     for (int i=0; i<numElts(addressInit); i++, addressKey++)
     {
         *addressKey = addressInit[i];
+    }
+}
+
+/* 
+ * Open up the email application with the person displayed
+ */
+void openInEmail(ABPerson *person)
+{
+    ABMultiValue *email = [person valueForProperty:kABEmailProperty];
+
+    NSString *identifier = [email primaryIdentifier]; 
+    if (!identifier)        // if they don't have a primary identified
+    {
+        identifier = [email identifierAtIndex:0];   // just use first
+    }
+
+    if (identifier)
+    {
+        NSString *address = [email valueForIdentifier:identifier];
+        NSString *url = [NSString stringWithFormat:@"mailto:%@", address];
+
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
     }
 }
 
@@ -386,10 +408,11 @@ usage(char *name)
 {
     int i;
     static char *help[] = {
-      "  -h           this help",
-      "  -O           open Address Book, showing first match",
-      "  -E           open Address Book, editing first match",
-      "  -r           display records in raw form",
+      "  -h    this help",
+      "  -O    open Address Book, showing first match",
+      "  -E    open Address Book, editing first match",
+      "  -M    open email application, sending to primary email of match",
+      "  -r    display records in raw form",
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
@@ -408,18 +431,21 @@ int main(int argc, char * const argv[])
         char *programName = argv[0];
 
         int opt;
-        while ((opt = getopt(argc, argv, ":hOEr")) > 0) 
+        while ((opt = getopt(argc, argv, ":hOEMr")) > 0) 
         {
             switch (opt) 
             {
                 case 'O':
                     // nw.name = optarg;
-                    gui = true;
+                    abGui = true;
                     edit = false;
                     break;
                 case 'E':
-                    gui = true;
+                    abGui = true;
                     edit = true;
+                    break;
+                case 'M':
+                    emailGui = true;
                     break;
                 case 'r':
                     raw = true;
@@ -452,9 +478,14 @@ int main(int argc, char * const argv[])
         while (person = (ABPerson *)[addressEnum nextObject]) 
         {
             display(person);
-            if (gui)
+            if (abGui)
             {
                 openInAddressBook(person, edit);
+                break;
+            }
+            if (emailGui)
+            {
+                openInEmail(person);
                 break;
             }
         }
