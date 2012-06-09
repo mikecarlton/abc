@@ -157,6 +157,70 @@ void init(Field *field, NSString **addressKey)
     }
 }
 
+const char 
+*str(NSString *ns)
+{
+    const char *s = NULL;
+
+    if (ns)
+    {
+        s = [ns UTF8String];
+    }
+
+    return (s) ? s : "";
+}
+
+/*
+ * Format and return a formatted address
+ */
+char *
+formattedAddress(NSDictionary *value, bool url)
+{
+    static char buffer[1024];
+
+    snprintf(buffer, sizeof(buffer), "%s, %s %s %s", 
+            str([value objectForKey: kABAddressStreetKey]),
+            str([value objectForKey: kABAddressCityKey]),
+            str([value objectForKey: kABAddressStateKey]),
+            str([value objectForKey: kABAddressZIPKey]));
+
+    if (url) /* escape any spaces */
+    {
+        char *s = buffer;
+        while ((s = index(s, ' ')))
+        {
+            *s='+';
+        }
+    }
+
+    return buffer;
+}
+
+/* 
+ * Open up a browser with the person's address mapped
+ */
+void openInMapping(ABPerson *person)
+{
+    ABMultiValue *addresses = [person valueForProperty:kABAddressProperty];
+
+    NSString *identifier = [addresses primaryIdentifier]; 
+    if (!identifier)        // if they don't have a primary identified
+    {
+        identifier = [addresses identifierAtIndex:0];   // just use first
+    }
+
+    if (identifier)
+    {
+        NSDictionary *address = [addresses valueForIdentifier:identifier];
+        NSString *url = [NSString stringWithFormat:
+                            @"http://maps.google.com/maps?q=%s", 
+                            formattedAddress(address, true)];
+
+printf("opening '%s'\n", str(url));
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+    }
+}
+
 /* 
  * Open up the email application with the person displayed
  */
@@ -175,6 +239,7 @@ void openInEmail(ABPerson *person)
         NSString *address = [email valueForIdentifier:identifier];
         NSString *url = [NSString stringWithFormat:@"mailto:%@", address];
 
+printf("opening '%s'\n", str(url));
         [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
     }
 }
@@ -190,19 +255,6 @@ void openInAddressBook(ABPerson *person, Boolean edit)
     NSString *urlString = [NSString stringWithFormat:@"addressbook://%@%s", 
                             [person uniqueId], edit ? "?edit" : ""];
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlString]];
-}
-
-const char 
-*str(NSString *ns)
-{
-    const char *s = NULL;
-
-    if (ns)
-    {
-        s = [ns UTF8String];
-    }
-
-    return (s) ? s : "";
 }
 
 /* 
@@ -326,7 +378,7 @@ printField(Field *field, const char *label, int width, char *terminator,
 }
 
 /*
- * Allocate and return a formatted name
+ * Allocate and print a formatted name
  */
 void
 printFormattedName(char *terminator)
@@ -341,8 +393,11 @@ printFormattedName(char *terminator)
     printField(&field[lastname], NULL, 0, terminator, true);
 }
 
+/*
+ * Display person in brief format
+ */
 void
-displayBrief(ABPerson *person)
+displayBrief(void)
 {
     printFormattedName(" ");
     printField(&field[phone], NULL, 0, " ", true);
@@ -382,7 +437,7 @@ display(ABPerson *person, DisplayForm form)
     /* if brief requested, print it and return */
     if (form == briefDisplay)
     {
-        displayBrief(person);
+        displayBrief();
         return;
     }
 
@@ -514,12 +569,13 @@ usage(char *name)
       "  -a        search all fields",
       "",
       "  -h        this help",
+      "  -u [id]   display unique ids; search for id if given",
+      "",
       "  -A        open Address Book with person",
       "  -E        open email application with message for person",
-      "  -M        open map application wiht address of person",
+      "  -M        open map application with address of person",
       "  -H        use 'home' values for gui",
       "  -W        use 'work' values for gui",
-      "  -u [id]   display unique ids; search for id if given",
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
@@ -590,6 +646,11 @@ int main(int argc, char * const argv[])
             if (abGui)
             {
                 openInAddressBook(person, edit);
+                break;
+            }
+            if (mapGui)
+            {
+                openInMapping(person);
                 break;
             }
             if (emailGui)
