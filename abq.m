@@ -425,14 +425,16 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 {
     NSMutableArray *searchTerms = [NSMutableArray new];
 
+    int fieldLimit = (searchFields == searchNames) ? finalname : numFields;
+
     for (int i=0; i<numTerms; i++)
     {
         NSString *key = [NSString stringWithCString:term[i] 
                                     encoding: NSUTF8StringEncoding];
         NSMutableArray *searchRecord = [NSMutableArray new];
 
-        /* look for term in any fields */
-        for (unsigned int j=0; j<numFields; j++)
+        /* look for term in name or all fields */
+        for (unsigned int j=0; j<fieldLimit; j++)
         {
 #if 1
             [searchRecord addObject: 
