@@ -21,21 +21,36 @@
 #define plural(n) ((n) == 1 ? "" : "s")
 #define eplural(n) ((n) == 1 ? "" : "es")
 
+typedef enum {
+    labelNone,
+    labelHome,
+    labelWork,
+} Label;
+
+typedef enum
+{
+    standardDisplay,
+    briefDisplay,
+    longDisplay,
+    rawDisplay,
+} DisplayForm;
+
+typedef enum
+{
+    searchNames,
+    searchAll,
+} SearchFields;
+
 Boolean emailGui = false;   // open gui email?
 Boolean mapGui = false;     // open gui map?
 Boolean abGui = false;      // open gui address book?
 Boolean edit = false;       // gui address book in edit mode?
 
-Boolean raw = false;        // display records in raw format?
 Boolean uid = false;        // display records with uid?
 
-typedef enum {
-    filterNone,
-    filterHome,
-    filterWork
-} Filter;
-
-Filter label = filterNone;  // filter search/choose values?
+Label label = labelNone;                    // use which label?
+DisplayForm displayForm = standardDisplay;  // type of display
+SearchFields searchFields = searchNames;    // type of search
 
 /* 
  * Field names defined in 
@@ -70,13 +85,13 @@ enum
     nickname,
     maidenname,
     finalname = maidenname,     // mark final name
-    birthday,
-    organization,
-    jobtitle,
+    address,
     phone,
     email,
-    address,
+    organization,
+    jobtitle,
     url,
+    birthday,
     related,
     note,
     numFields,
@@ -109,13 +124,13 @@ void init(Field *field, NSString **addressKey)
         { "Last Name",    kABLastNameProperty,     kABStringProperty },
         { "Nickname",     kABNicknameProperty,     kABStringProperty },
         { "Maiden Name",  kABMaidenNameProperty,   kABStringProperty },
-        { "Birthday",     kABBirthdayProperty,     kABDateProperty },
-        { "Organization", kABOrganizationProperty, kABStringProperty },
-        { "Job Title",    kABJobTitleProperty,     kABStringProperty },
+        { "Address",      kABAddressProperty,      kABMultiDictionaryProperty },
         { "Phone",        kABPhoneProperty,        kABMultiStringProperty },
         { "Email",        kABEmailProperty,        kABMultiStringProperty },
-        { "Address",      kABAddressProperty,      kABMultiDictionaryProperty },
+        { "Organization", kABOrganizationProperty, kABStringProperty },
+        { "Job Title",    kABJobTitleProperty,     kABStringProperty },
         { "URL",          kABURLsProperty,         kABMultiStringProperty },
+        { "Birthday",     kABBirthdayProperty,     kABDateProperty },
         { "Related",      kABRelatedNamesProperty, kABMultiStringProperty },
         { "Note",         kABNoteProperty,         kABStringProperty },
     };
@@ -180,7 +195,7 @@ void openInAddressBook(ABPerson *person, Boolean edit)
 const char 
 *str(NSString *ns)
 {
-    const char *s;
+    const char *s = NULL;
 
     if (ns)
     {
@@ -242,27 +257,118 @@ const char *keyFrom(id value, NSString *key)
     return str([value objectForKey: key]);
 }
 
+void
+printField(Field *field, const char *label, int width, char *terminator, 
+           bool abbrev)
+{
+    unsigned int count;
+
+    if (label)
+    {
+        printf("%*s: ", width, label);  // if requested, label on 1st line only
+    }
+
+    switch (field->abType)
+    {
+        case kABStringProperty:
+            if (field->property == kABNoteProperty)  // multi-line string
+            {                                   
+                printNote(width, str(field->value.string));
+            } else {                                   // simple string
+                printf("%s%s", str(field->value.string), terminator);
+            }
+            break;
+        case kABDateProperty:
+            printf("%s%s", str([field->value.date 
+                         descriptionWithCalendarFormat: @"%A, %B %e, %Y"
+                         timeZone: nil locale: nil]), terminator);
+            break;
+        case kABMultiStringProperty:
+            count = [field->value.multi count];
+            for (unsigned int j = 0; j < count; j++) 
+            {
+                const char *value = str([field->value.multi valueAtIndex:j]);
+                const char *kind = str([field->value.multi labelAtIndex:j]);
+
+                kind = cleanLabel(kind);  // returns a duplicate, must free
+                if (label && j > 0)       // multiple values
+                {
+                    printf("%*s: ", width, "");
+                }
+                printf("%s (%.*s)%s", value, abbrev ? 1 : -1, kind, terminator);
+                free((void *)kind);
+            }
+            break;
+        case kABMultiDictionaryProperty:
+            count = [field->value.multi count];
+            for (unsigned int j = 0; j < count; j++) 
+            {
+                NSDictionary *value = [field->value.multi valueAtIndex:j];
+                const char *kind = str([field->value.multi labelAtIndex:j]);
+
+                kind = cleanLabel(kind);  // returns a duplicate
+                if (label && j > 0)       // multiple values
+                {
+                    printf("%*s: ", width, "");
+                }
+                printf("%s, %s %s %s (%.*s)%s", 
+                        str([value objectForKey: kABAddressStreetKey]),
+                        str([value objectForKey: kABAddressCityKey]),
+                        str([value objectForKey: kABAddressStateKey]),
+                        str([value objectForKey: kABAddressZIPKey]),
+                        abbrev ? 1 : -1, kind, terminator);
+                free((void *)kind);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 /*
  * Allocate and return a formatted name
  */
-char *
-formattedName(ABPerson *person)
+void
+printFormattedName(char *terminator)
 {
-    return "";
+    int first = firstname;
+
+    if (field[nickname].value.generic)
+    {
+        first = nickname;
+    }
+    printField(&field[first], NULL, 0, " ", true);
+    printField(&field[lastname], NULL, 0, terminator, true);
+}
+
+void
+displayBrief(ABPerson *person)
+{
+    printFormattedName(" ");
+    printField(&field[phone], NULL, 0, " ", true);
+    printField(&field[email], NULL, 0, " ", true);
+    printf("\n");
+}
+
+void 
+displayRaw(ABPerson *person)
+{
+    printf("%s\n", str([person description]));
 }
 
 /*
  * Display one record
  */
-void display(ABPerson *person)
+void 
+display(ABPerson *person, DisplayForm form)
 {
-    if (raw)
+    if (form == rawDisplay)
     {
-        printf("%s\n", str([person description]));
+        displayRaw(person);
         return;
     }
 
-    /* find widest label of non-null values */
+    /* retrieve all values and find widest label of non-null values */
     int labelWidth = 0;
     for (unsigned int i=0; i<numFields; i++)
     {
@@ -273,6 +379,13 @@ void display(ABPerson *person)
         }
     }
 
+    /* if brief requested, print it and return */
+    if (form == briefDisplay)
+    {
+        displayBrief(person);
+        return;
+    }
+
     /* print non-null fields */
     for (unsigned int i=0; i<numFields; i++)
     {
@@ -281,68 +394,20 @@ void display(ABPerson *person)
             continue;
         }
 
-        printf("%*s: ", labelWidth, field[i].label); // label on 1st line only
-
-        switch (field[i].abType)
+        if (form == standardDisplay && i > email)   // stop here for standard
         {
-            unsigned int count;
+            break;
+        }
 
-            case kABStringProperty:
-                if (field[i].property == kABNoteProperty)  // multi-line string
-                {                                   
-                    printNote(labelWidth, str(field[i].value.string));
-                } else {                                   // simple string
-                    printf("%s\n", str(field[i].value.string));
-                }
-                break;
-            case kABDateProperty:
-                printf("%s\n", str([field[i].value.date 
-                             descriptionWithCalendarFormat: @"%A, %B %e, %Y"
-                             timeZone: nil locale: nil]));
-                break;
-            case kABMultiStringProperty:
-                count = [field[i].value.multi count];
-                for (unsigned int j = 0; j < count; j++) 
-                {
-                    const char *value = str([field[i].value.multi 
-                                                        valueAtIndex:j]);
-                    const char *kind = str([field[i].value.multi 
-                                                        labelAtIndex:j]);
-
-                    kind = cleanLabel(kind);  // returns a duplicate, must free
-                    if (j != 0)               // multiple values
-                    {
-                        printf("%*s: ", labelWidth, "");
-                    }
-                    printf("%s (%s)\n", value, kind);
-                    free((void *)kind);
-                }
-                break;
-            case kABMultiDictionaryProperty:
-                count = [field[i].value.multi count];
-                for (unsigned int j = 0; j < count; j++) 
-                {
-                    NSDictionary *value = [field[i].value.multi 
-                                                        valueAtIndex:j];
-                    const char *kind = str([field[i].value.multi 
-                                                        labelAtIndex:j]);
-
-                    kind = cleanLabel(kind);  // returns a duplicate
-                    if (j != 0)
-                    {
-                        printf("%*s: ", labelWidth, "");
-                    }
-                    printf("%s, %s %s %s (%s)\n", 
-                            str([value objectForKey: kABAddressStreetKey]),
-                            str([value objectForKey: kABAddressCityKey]),
-                            str([value objectForKey: kABAddressStateKey]),
-                            str([value objectForKey: kABAddressZIPKey]),
-                            kind);
-                    free((void *)kind);
-                }
-                break;
-            default:
-                break;
+        if (form == standardDisplay && i <= finalname)  // print formatted name
+        {
+            printf("%*s: ", labelWidth, "Name");
+            printFormattedName("\n");
+            i = finalname;                          // skip other name fields
+        }
+        else
+        {
+            printField(&field[i], field[i].label, labelWidth, "\n", false);
         }
     }
 
@@ -350,7 +415,7 @@ void display(ABPerson *person)
     {
         const char *uidStr = str([person valueForProperty:kABUIDProperty]);
         printf("%*s: %.*s\n", labelWidth, "UID", 
-               rindex(uidStr, ':') - uidStr, uidStr);
+               (int)(rindex(uidStr, ':') - uidStr), uidStr);
     }
 
     printf("\n");
@@ -431,21 +496,28 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 /*
  * Summarize program usage 
  */
-static const char *options = ":hAEMHWur";
+static const char *options = ":sblrnahAEMHWu";
 
 static void 
 usage(char *name)
 {
     int i;
     static char *help[] = {
-      "  -h    this help",
+      "  -s        display records in standard form (default)",
+      "  -b        display records in brief form",
+      "  -l        display records in long form",
+      "  -r        display records in raw form",
+      "",
+      "  -n        search name fields only (default)",
+      "  -a        search all fields",
+      "",
+      "  -h        this help",
       "  -A        open Address Book with person",
       "  -E        open email application with message for person",
       "  -M        open map application wiht address of person",
       "  -H        use 'home' values for gui",
       "  -W        use 'work' values for gui",
-      "  -u [id]   display unique ids; search for id if present",
-      "  -r        display records in raw form",
+      "  -u [id]   display unique ids; search for id if given",
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
@@ -468,29 +540,23 @@ int main(int argc, char * const argv[])
         {
             switch (opt) 
             {
-                case 'A':
-                    // nw.name = optarg;
-                    abGui = true;
-                    edit = false;
-                    break;
-                case 'E':
-                    emailGui = true;
-                    break;
-                case 'M':
-                    mapGui = true;
-                    break;
-                case 'H':
-                    label = filterHome;
-                    break;
-                case 'W':
-                    label = filterWork;
-                    break;
-                case 'r':
-                    raw = true;
-                    break;
-                case 'u':
-                    uid = true;
-                    break;
+                case 's': displayForm = standardDisplay; break;
+                case 'b': displayForm = briefDisplay;    break;
+                case 'l': displayForm = longDisplay;     break;
+                case 'r': displayForm = rawDisplay;      break;
+
+                case 'n': searchFields = searchNames; break;
+                case 'a': searchFields = searchAll;   break;
+
+                case 'A': abGui = true; edit = false; break;
+                case 'E': emailGui = true;            break;
+                case 'M': mapGui = true;              break;
+
+                case 'H': label = labelHome; break;
+                case 'W': label = labelWork; break;
+
+                case 'u': uid = true; break;
+
                 case 'h':
                 default:
                     usage(programName);
@@ -518,7 +584,7 @@ int main(int argc, char * const argv[])
         ABPerson *person;
         while (person = (ABPerson *)[addressEnum nextObject]) 
         {
-            display(person);
+            display(person, displayForm);
             if (abGui)
             {
                 openInAddressBook(person, edit);
