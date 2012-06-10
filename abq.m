@@ -46,7 +46,8 @@ Boolean mapGui = false;     // open gui map?
 Boolean abGui = false;      // open gui address book?
 Boolean edit = false;       // gui address book in edit mode?
 
-Boolean uid = false;        // display records with uid?
+Boolean uid = false;        // display/search records with uid?
+const char *uidStr = NULL;  // uid to search for 
 
 Label label = labelNone;                    // use which label?
 DisplayForm displayForm = standardDisplay;  // type of display
@@ -216,7 +217,6 @@ void openInMapping(ABPerson *person)
                             @"http://maps.google.com/maps?q=%s", 
                             formattedAddress(address, true)];
 
-printf("opening '%s'\n", str(url));
         [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
     }
 }
@@ -239,7 +239,6 @@ void openInEmail(ABPerson *person)
         NSString *address = [email valueForIdentifier:identifier];
         NSString *url = [NSString stringWithFormat:@"mailto:%@", address];
 
-printf("opening '%s'\n", str(url));
         [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
     }
 }
@@ -534,6 +533,18 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
                                     children:searchRecord]];
     }
 
+    /* if a UID is given, require it to match also */
+    if (uidStr)
+    {
+        [searchTerms addObject: 
+            [ABPerson searchElementForProperty:kABUIDProperty
+                            label:nil       
+                            key:nil
+                            value: [NSString stringWithCString:uidStr
+                                             encoding: NSUTF8StringEncoding]
+                            comparison:kABContainsSubStringCaseInsensitive]];
+    }
+
     /* search all records for each term */
     ABSearchElement *search = [ABSearchElement 
                                 searchElementForConjunction:kABSearchAnd
@@ -562,28 +573,49 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
  * Summarize program usage 
  */
 static const char *options = ":sblrnahAEMHWu";
+static struct option longopts[] = 
+{
+     { "std",     no_argument,       NULL,           's' },
+     { "brief",   no_argument,       NULL,           'b' },
+     { "long",    no_argument,       NULL,           'l' },
+     { "raw",     no_argument,       NULL,           'r' },
+
+     { "name",    no_argument,       NULL,           'n' },
+     { "all",     no_argument,       NULL,           'a' },
+
+     { "help",    no_argument,       NULL,           'h' },
+     { "uid",     optional_argument, NULL,           'u' },
+
+     { "address", no_argument,       NULL,           'A' },
+     { "email",   no_argument,       NULL,           'E' },
+     { "map",     no_argument,       NULL,           'M' },
+     { "home",    no_argument,       NULL,           'H' },
+     { "work",    no_argument,       NULL,           'W' },
+
+     { NULL,      0,                 NULL,           0 }
+};
 
 static void 
 usage(char *name)
 {
     int i;
     static char *help[] = {
-      "  -s        display records in standard form (default)",
-      "  -b        display records in brief form",
-      "  -l        display records in long form",
-      "  -r        display records in raw form",
+      "  -s, --std      display records in standard form (default)",
+      "  -b, --brief    display records in brief form",
+      "  -l, --long     display records in long form",
+      "  -r, --raw      display records in raw form",
       "",
-      "  -n        search name fields only (default)",
-      "  -a        search all fields",
+      "  -n, --name     search name fields only (default)",
+      "  -a, --all      search all fields",
       "",
-      "  -h        this help",
-      "  -u [id]   display unique ids; search for id if given",
+      "  -h, --help     this help",
+      "  -u, --uid[=id] display unique ids; search for id if given",
       "",
-      "  -A        open Address Book with person",
-      "  -E        open email application with message for person",
-      "  -M        open map application with address of person",
-      "  -H        use 'home' values for gui",
-      "  -W        use 'work' values for gui",
+      "  -A, --address  open Address Book with person",
+      "  -E, --email    open email application with message for person",
+      "  -M, --map      open map application with address of person",
+      "  -H, --home     use 'home' values for gui",
+      "  -W, --work     use 'work' values for gui",
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
@@ -602,7 +634,7 @@ int main(int argc, char * const argv[])
         char *programName = argv[0];
 
         int opt;
-        while ((opt = getopt(argc, argv, options)) > 0) 
+        while ((opt = getopt_long(argc, argv, options, longopts, NULL)) > 0) 
         {
             switch (opt) 
             {
@@ -621,7 +653,7 @@ int main(int argc, char * const argv[])
                 case 'H': label = labelHome; break;
                 case 'W': label = labelWork; break;
 
-                case 'u': uid = true; break;
+                case 'u': uid = true; uidStr = optarg; break;
 
                 case 'h':
                 default:
