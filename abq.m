@@ -427,10 +427,18 @@ display(ABPerson *person, DisplayForm form)
     int labelWidth = 0;
     for (unsigned int i=0; i<numFields; i++)
     {
-        field[i].value.generic = [person valueForProperty:field[i].property];
-        if (field[i].value.generic && field[i].labelWidth > labelWidth)
+        if (form == standardDisplay && i > email)   // stop here for standard
         {
-            labelWidth = field[i].labelWidth;
+            break;
+        }
+
+        field[i].value.generic = [person valueForProperty:field[i].property];
+
+        int width = (form == standardDisplay && i <= finalname ) ? 
+                        strlen("Name") : field[i].labelWidth;
+        if (field[i].value.generic && width > labelWidth)
+        {
+            labelWidth = width;
         }
     }
 
