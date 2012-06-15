@@ -751,7 +751,23 @@ int main(int argc, char * const argv[])
         
         NSArray *results = search(book, argc, argv);
 
-        NSEnumerator *addressEnum = [results objectEnumerator];
+        // sort by last name, first name, organization
+        NSSortDescriptor *lastDescriptor, *firstDescriptor;
+        lastDescriptor = [[[NSSortDescriptor alloc]
+              initWithKey:@"Last"
+              ascending:YES
+          selector:@selector(localizedCaseInsensitiveCompare:)] autorelease];
+        firstDescriptor = [[[NSSortDescriptor alloc]
+              initWithKey:@"First"
+              ascending:YES
+          selector:@selector(localizedCaseInsensitiveCompare:)] autorelease];
+ 
+        NSArray *sortDescriptors = [NSArray arrayWithObjects:lastDescriptor,
+                                                    firstDescriptor, nil];
+        NSArray *sortedResults = [results 
+                                sortedArrayUsingDescriptors:sortDescriptors];
+
+        NSEnumerator *addressEnum = [sortedResults objectEnumerator];
 
         ABPerson *person;
         while (person = (ABPerson *)[addressEnum nextObject]) 
