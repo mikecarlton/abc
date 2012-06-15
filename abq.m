@@ -7,6 +7,28 @@
  *
  * build: 
  * clang -framework Foundation -framework AddressBook -framework AppKit -Wall -o abq abq.m
+ * Field names defined in 
+ * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABGlobals.h
+ *
+ * Structures in
+ * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/AddressBook.h
+ * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABAddressBook.h
+ *
+ * TODO:
+ * - home and work selection for GUI apps
+ *      kABWorkLabel, kABHomeLabel
+ * - just first work and first home for brief email and phone
+ * - additional properties: social media, related dates
+ *      kABInstantMessageProperty.
+ *      kABOtherDatesProperty, kABMultiDateProperty
+ * - handle related names (use record label as display label)
+ * - ability to set primary email and address
+ * - search dates
+ * - search organization as part of name
+ * - group support: list groups, list members of group
+ *      kABGroupNameProperty
+ * - use person flags (e.g. display as company), see
+ *   https://developer.apple.com/library/mac/#samplecode/ABPresence/Listings/ABPersonDisplayNameAdditions_m.html
  */
 
 #import <Foundation/Foundation.h>
@@ -53,14 +75,6 @@ Label label = labelNone;                    // use which label?
 DisplayForm displayForm = standardDisplay;  // type of display
 SearchFields searchFields = searchNames;    // type of search
 
-/* 
- * Field names defined in 
- * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABGlobals.h
- *
- * Structures in
- * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/AddressBook.h
- * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABAddressBook.h
-*/
 
 typedef struct
 {
@@ -158,8 +172,8 @@ void init(Field *field, NSString **addressKey)
     }
 }
 
-const char 
-*str(NSString *ns)
+const char *
+str(NSString *ns)
 {
     const char *s = NULL;
 
@@ -171,8 +185,50 @@ const char
     return (s) ? s : "";
 }
 
+/* 
+ * Allocate and return a cleaned up label
+ * Labels come out of AB like this: _$!<Work>!$_ 
+ */
+const char *cleanLabel(const char *label)
+{
+    const char *kind;
+
+    const char *start = index(label, '<');
+    const char *end = rindex(label, '>');
+    if (start && end && end > start)
+    {
+        kind = strndup(start+1, end-start-1);
+    } else {
+        kind = strdup(label);
+    }
+
+    return kind;
+}
+
+/*
+ * returns first value with matching label
+ */
+NSString *
+getValueWithLabel(ABMultiValue *multi, NSString *labelWanted)
+{
+    NSString *result = nil;
+    unsigned int count = [multi count];
+
+    for (unsigned int i = 0; i < count; i++) 
+    {
+        if ([labelWanted isEqualToString:[multi labelAtIndex:i]] == true)
+        {
+            result = [multi valueAtIndex:i];
+            break;
+        }
+    }
+
+    return result;
+}
+
 /*
  * Format and return a formatted address
+ * FIXME: use formattedAddressFromDictionary
  */
 char *
 formattedAddress(NSDictionary *value, bool url)
@@ -254,26 +310,6 @@ void openInAddressBook(ABPerson *person, Boolean edit)
     NSString *urlString = [NSString stringWithFormat:@"addressbook://%@%s", 
                             [person uniqueId], edit ? "?edit" : ""];
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlString]];
-}
-
-/* 
- * Allocate and return a cleaned up label
- * Labels come out of AB like this: _$!<Work>!$_ 
- */
-const char *cleanLabel(const char *label)
-{
-    const char *kind;
-
-    const char *start = index(label, '<');
-    const char *end = rindex(label, '>');
-    if (start && end && end > start)
-    {
-        kind = strndup(start+1, end-start-1);
-    } else {
-        kind = strdup(label);
-    }
-
-    return kind;
 }
 
 /*
@@ -398,9 +434,47 @@ printFormattedName(char *terminator)
 void
 displayBrief(void)
 {
+    NSString *phoneLabels[] =
+    {
+        kABPhoneMobileLabel,
+        kABPhoneHomeLabel,
+        kABPhoneWorkLabel
+    };
+
+    NSString *emailLabels[] =
+    {
+        kABEmailHomeLabel,
+        kABEmailWorkLabel
+    };
+
     printFormattedName(" ");
-    printField(&field[phone], NULL, 0, " ", true);
-    printField(&field[email], NULL, 0, " ", true);
+    
+    // first of each phone type
+    for (int i=0; i<numElts(phoneLabels); i++)
+    {
+        NSString *s = getValueWithLabel(field[phone].value.multi, 
+                                        phoneLabels[i]);
+        if (s)
+        {
+            const char *kind = cleanLabel(str(phoneLabels[i]));
+
+            printf("%s (%.1s) ", str(s), kind);
+        }
+    }
+
+    // first of each email type
+    for (int i=0; i<numElts(emailLabels); i++)
+    {
+        NSString *s = getValueWithLabel(field[email].value.multi, 
+                                        emailLabels[i]);
+        if (s)
+        {
+            const char *kind = cleanLabel(str(emailLabels[i]));
+
+            printf("%s (%.1s) ", str(s), kind);
+        }
+    }
+
     printf("\n");
 }
 
