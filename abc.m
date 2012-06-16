@@ -6,7 +6,7 @@
  * http://www.opensource.org/licenses/mit-license.php
  *
  * build: 
- * clang -framework Foundation -framework AddressBook -framework AppKit -Wall -o abq abq.m
+ * clang -framework Foundation -framework AddressBook -framework AppKit -Wall -o abc abc.m
  * Field names defined in 
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABGlobals.h
  *
@@ -17,9 +17,8 @@
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABAddressBook.h
  *
  * TODO:
- * - home and work selection for GUI apps
- *      kABWorkLabel, kABHomeLabel
- * - just first work and first home for brief email and phone
+ * - sort results according to AB preference (if not specified):
+ *      defaultNameOrdering 
  * - additional properties: social media, related dates
  *      kABInstantMessageProperty.
  *      kABOtherDatesProperty, kABMultiDateProperty
@@ -27,8 +26,11 @@
  * - ability to set primary email and address
  * - search dates
  * - search organization as part of name
- * - group support: list groups, list members of group
+ * - group search: 
  *      kABGroupNameProperty
+ * - display as vcard
+ * - escape urls via    (NSString *)
+ *      stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding
  * - use person flags (e.g. display as company), see
  *   https://developer.apple.com/library/mac/#samplecode/ABPresence/Listings/ABPersonDisplayNameAdditions_m.html
  */
@@ -49,7 +51,7 @@ typedef enum {
     labelNone,
     labelHome,
     labelWork,
-} Label;
+} Preferred;
 
 typedef enum
 {
@@ -66,6 +68,7 @@ typedef enum
     searchAll,
 } SearchFields;
 
+Boolean urlGui = false;     // open browser gui with URL?
 Boolean emailGui = false;   // open gui email?
 Boolean mapGui = false;     // open gui map?
 Boolean abGui = false;      // open gui address book?
@@ -75,10 +78,9 @@ int listGroups = false;     // list all groups?
 Boolean uid = false;        // display/search records with uid?
 const char *uidStr = NULL;  // uid to search for 
 
-Label label = labelNone;                    // use which label?
+Preferred label = labelNone;                // use which label?
 DisplayForm displayForm = standardDisplay;  // type of display
 SearchFields searchFields = searchNames;    // type of search
-
 
 typedef struct
 {
@@ -130,6 +132,25 @@ enum
 };
 
 NSString *addressKey[numAddressKeys];
+
+/*
+ * nsprintf utility (allows printf-like with NSString support)
+ */
+void
+nsprintf(NSString *format, ...) 
+{
+    va_list args;
+    va_start(args, format);
+    NSString *formattedStr = [[NSString alloc] initWithFormat: format
+                                                  arguments: args];
+    va_end(args);
+
+    NSFileHandle *output = [NSFileHandle fileHandleWithStandardOutput];
+    [output writeData: [formattedStr dataUsingEncoding: NSNEXTSTEPStringEncoding]];
+//    [[NSFileHandle fileHandleWithStandardOutput]
+//        writeData: [formattedStr dataUsingEncoding: NSNEXTSTEPStringEncoding]];
+    [formattedStr release];
+}
 
 /*
  * Initialize the fields
@@ -191,7 +212,8 @@ str(NSString *ns)
 
 /* 
  * Allocate and return a cleaned up label
- * Labels come out of AB like this: _$!<Work>!$_ 
+ * Standard (Apple defined) labels come out of AB like this: _$!<Work>!$_
+ * User-defined labels are unadorned, e.g. Account
  */
 const char *cleanLabel(const char *label)
 {
@@ -212,10 +234,10 @@ const char *cleanLabel(const char *label)
 /*
  * returns first value with matching label
  */
-NSString *
+id
 getValueWithLabel(ABMultiValue *multi, NSString *labelWanted)
 {
-    NSString *result = nil;
+    id result = nil;
     unsigned int count = [multi count];
 
     for (unsigned int i = 0; i < count; i++) 
@@ -257,49 +279,102 @@ formattedAddress(NSDictionary *value, bool url)
     return buffer;
 }
 
-/* 
- * Open up a browser with the person's address mapped
+/*
+ * returns identifier for preferred label of property
+ *
+ * if preferred is none, return first match of primary, home, work
+ * else return first match of home or work as requested
  */
-void openInMapping(ABPerson *person)
+id
+getPreferredProperty(ABPerson *person, NSString *property, Preferred label)
 {
-    ABMultiValue *addresses = [person valueForProperty:kABAddressProperty];
+    ABMultiValue *multi = [person valueForProperty:property];
+    NSString *identifier = nil;
+    id value = nil;
 
-    NSString *identifier = [addresses primaryIdentifier]; 
-    if (!identifier)        // if they don't have a primary identified
+    switch (label)
     {
-        identifier = [addresses identifierAtIndex:0];   // just use first
+        case labelNone:
+            identifier = [multi primaryIdentifier]; 
+            if (identifier)
+            {
+                value = [multi valueForIdentifier:identifier];
+                break;
+            } // else fall through to home next
+        case labelHome:
+            value = getValueWithLabel(multi, kABHomeLabel);
+
+            // try "HomePage" also if property is URLs
+            if (!value && [property isEqualToString:kABURLsProperty])
+            {
+                value = getValueWithLabel(multi, kABHomePageLabel );
+            }
+            if (value)
+            {
+                break;
+            } // else fall through to work
+        case labelWork:
+            value = getValueWithLabel(multi, kABWorkLabel);
+            break;
+        default:
+            break;
     }
 
-    if (identifier)
-    {
-        NSDictionary *address = [addresses valueForIdentifier:identifier];
-        NSString *url = [NSString stringWithFormat:
-                            @"http://maps.google.com/maps?q=%s", 
-                            formattedAddress(address, true)];
+    return value;
+}
 
-        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+/* 
+ * Open the specified URL
+ */
+void 
+openURL(NSString *url)
+{
+    // stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+}
+
+/* 
+ * Open up a browser with the person's URL
+ */
+void openInBrowser(ABPerson *person, Preferred label)
+{
+    NSString *url = getPreferredProperty(person, kABURLsProperty, label);
+
+    if (url)
+    {
+        openURL(url);
     }
 }
 
 /* 
- * Open up the email application with the person displayed
+ * Open up a browser with the person's address mapped
  */
-void openInEmail(ABPerson *person)
+void openInMapping(ABPerson *person, Preferred label)
 {
-    ABMultiValue *email = [person valueForProperty:kABEmailProperty];
+    NSDictionary *address = getPreferredProperty(person, kABAddressProperty, 
+                                                 label);
 
-    NSString *identifier = [email primaryIdentifier]; 
-    if (!identifier)        // if they don't have a primary identified
+    if (address)
     {
-        identifier = [email identifierAtIndex:0];   // just use first
+        NSString *url = [NSString stringWithFormat:
+                            @"http://maps.google.com/maps?q=%s", 
+                            formattedAddress(address, true)];
+        openURL(url);
     }
+}
 
-    if (identifier)
+/* 
+ * Open up the email application with a new message for person
+ */
+void openInEmail(ABPerson *person, Preferred label)
+{
+    NSString *email = getPreferredProperty(person, kABEmailProperty, label);
+
+    if (email)
     {
-        NSString *address = [email valueForIdentifier:identifier];
-        NSString *url = [NSString stringWithFormat:@"mailto:%@", address];
+        NSString *url = [NSString stringWithFormat:@"mailto:%@", email];
 
-        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+        openURL(url);
     }
 }
 
@@ -311,9 +386,10 @@ void openInEmail(ABPerson *person)
  */
 void openInAddressBook(ABPerson *person, Boolean edit)
 {
-    NSString *urlString = [NSString stringWithFormat:@"addressbook://%@%s", 
+    NSString *url = [NSString stringWithFormat:@"addressbook://%@%s", 
                             [person uniqueId], edit ? "?edit" : ""];
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlString]];
+    
+    openURL(url);
 }
 
 /*
@@ -695,7 +771,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 /*
  * Summarize program usage 
  */
-static const char *options = ":sblrnahAEMHWu";
+static const char *options = ":sblrnaghuAEMUHW";
 static struct option longopts[] = 
 {
      { "std",     no_argument,       NULL,           's' },
@@ -715,6 +791,7 @@ static struct option longopts[] =
      { "address", no_argument,       NULL,           'A' },
      { "email",   no_argument,       NULL,           'E' },
      { "map",     no_argument,       NULL,           'M' },
+     { "url",     no_argument,       NULL,           'U' },
      { "home",    no_argument,       NULL,           'H' },
      { "work",    no_argument,       NULL,           'W' },
 
@@ -743,6 +820,7 @@ usage(char *name)
       "  -A, --address  open Address Book with person",
       "  -E, --email    open email application with message for person",
       "  -M, --map      open map application with address of person",
+      "  -U, --url      open browser with URL of person",
       "  -H, --home     use 'home' values for gui",
       "  -W, --work     use 'work' values for gui",
     };
@@ -783,6 +861,7 @@ int main(int argc, char * const argv[])
                 case 'A': abGui = true; edit = false; break;
                 case 'E': emailGui = true;            break;
                 case 'M': mapGui = true;              break;
+                case 'U': urlGui = true;              break;
 
                 case 'H': label = labelHome; break;
                 case 'W': label = labelWork; break;
@@ -852,14 +931,19 @@ int main(int argc, char * const argv[])
                 openInAddressBook(person, edit);
                 break;
             }
+            if (urlGui)
+            {
+                openInBrowser(person, label);
+                break;
+            }
             if (mapGui)
             {
-                openInMapping(person);
+                openInMapping(person, label);
                 break;
             }
             if (emailGui)
             {
-                openInEmail(person);
+                openInEmail(person, label);
                 break;
             }
         }
