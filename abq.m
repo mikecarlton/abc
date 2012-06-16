@@ -12,6 +12,8 @@
  *
  * Structures in
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/AddressBook.h
+ * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABPerson.h
+ * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABGroup.h
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABAddressBook.h
  *
  * TODO:
@@ -60,6 +62,7 @@ typedef enum
 typedef enum
 {
     searchNames,
+    searchGroups,
     searchAll,
 } SearchFields;
 
@@ -68,6 +71,7 @@ Boolean mapGui = false;     // open gui map?
 Boolean abGui = false;      // open gui address book?
 Boolean edit = false;       // gui address book in edit mode?
 
+int listGroups = false;     // list all groups?
 Boolean uid = false;        // display/search records with uid?
 const char *uidStr = NULL;  // uid to search for 
 
@@ -479,13 +483,58 @@ displayBrief(void)
 }
 
 void 
-displayRaw(ABPerson *person)
+displayRaw(ABRecord *record)
 {
-    printf("%s\n", str([person description]));
+    printf("%s\n", str([record description]));
+}
+
+
+/*
+ * Display one group record
+ */
+void 
+displayGroup(ABGroup *group, DisplayForm form)
+{
+    if (form == rawDisplay)
+    {
+        displayRaw(group);
+        return;
+    }
+
+    NSString *name = [group valueForProperty:kABGroupNameProperty];
+    printf("%s", str(name));
+
+    if (form == briefDisplay)
+    {
+        printf("\n");
+        return;
+    }
+
+    NSArray *members = [group members];
+    int length = [members count];
+    printf(" (%d member%s)\n", length, plural(length));
+
+    if (form == longDisplay)
+    {
+        NSEnumerator *membersEnum = [members objectEnumerator];
+        ABPerson *person;
+        while (person = (ABPerson *)[membersEnum nextObject]) 
+        {
+            for (unsigned int i=0; i<finalname; i++)
+            {
+                field[i].value.string = [person 
+                        valueForProperty:field[i].property];
+            }
+            printf("\t");
+            printFormattedName("\n");
+        }
+
+        return;
+    }
 }
 
 /*
- * Display one record
+ * Display one person record
  */
 void 
 display(ABPerson *person, DisplayForm form)
@@ -656,9 +705,12 @@ static struct option longopts[] =
 
      { "name",    no_argument,       NULL,           'n' },
      { "all",     no_argument,       NULL,           'a' },
+     { "group",   no_argument,       NULL,           'g' },
 
      { "help",    no_argument,       NULL,           'h' },
      { "uid",     optional_argument, NULL,           'u' },
+
+     { "groups",  no_argument,       &listGroups,     1 },
 
      { "address", no_argument,       NULL,           'A' },
      { "email",   no_argument,       NULL,           'E' },
@@ -680,10 +732,13 @@ usage(char *name)
       "  -r, --raw      display records in raw form",
       "",
       "  -n, --name     search name fields only (default)",
-      "  -a, --all      search all fields",
+      "  -a, --all      search all Person fields",
+      "  -g, --group    search group name only",
       "",
       "  -h, --help     this help",
       "  -u, --uid[=id] display unique ids; search for id if given",
+      "",
+      "      --groups   list all groups",
       "",
       "  -A, --address  open Address Book with person",
       "  -E, --email    open email application with message for person",
@@ -708,8 +763,13 @@ int main(int argc, char * const argv[])
         char *programName = argv[0];
 
         int opt;
-        while ((opt = getopt_long(argc, argv, options, longopts, NULL)) > 0) 
+        while ((opt = getopt_long(argc, argv, options, longopts, NULL)) >= 0) 
         {
+            if (opt == 0)
+            {
+                continue;       // long opt only
+            }
+
             switch (opt) 
             {
                 case 's': displayForm = standardDisplay; break;
@@ -739,7 +799,7 @@ int main(int argc, char * const argv[])
         argc -= optind;
         argv += optind;
 
-        if (argc < 1)
+        if (argc < 1 && !uidStr && !listGroups)
         {
             usage(programName);
         }
@@ -749,6 +809,20 @@ int main(int argc, char * const argv[])
 
         ABAddressBook *book = [ABAddressBook sharedAddressBook];
         
+        if (listGroups)
+        {
+            NSArray *groups = [book groups];
+            NSEnumerator *groupEnum = [groups objectEnumerator];
+
+            ABGroup *group;
+            while (group = (ABGroup *)[groupEnum nextObject]) 
+            {
+                displayGroup(group, displayForm);
+            }
+
+            return 0;
+        }
+
         NSArray *results = search(book, argc, argv);
 
         // sort by last name, first name, organization
@@ -791,7 +865,10 @@ int main(int argc, char * const argv[])
         }
 
         unsigned long numResults = [results count];
-        printf("%lu match%s\n", numResults, eplural(numResults));
+        if (numResults != 1)
+        {
+            printf("%lu match%s\n", numResults, eplural(numResults));
+        }
     }
 
     return 0;
