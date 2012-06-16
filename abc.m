@@ -753,6 +753,25 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 }
 
 /*
+ * Returns a new array sorted by keys
+ */
+NSArray *
+sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
+{
+    NSMutableArray *descriptors = [NSMutableArray new];
+    
+    for (unsigned int i=0; i<numKeys; i++)
+    {
+        [descriptors addObject: [[NSSortDescriptor alloc]
+                                    initWithKey:keys[i]
+                                    ascending:YES
+                        selector:@selector(localizedCaseInsensitiveCompare:)]];
+    }
+
+    return [unsorted sortedArrayUsingDescriptors:descriptors];
+}
+
+/*
     search filters:
         first F 
         first L 
@@ -760,10 +779,6 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
         email M
         city C
         street S
-    display type:
-        short
-        normal
-        long
     limit n <arg>
     interactive i
  */
@@ -890,7 +905,8 @@ int main(int argc, char * const argv[])
         
         if (listGroups)
         {
-            NSArray *groups = [book groups];
+            NSString *keys[] = { @"GroupName" };
+            NSArray *groups = sortBy([book groups], numElts(keys), keys);
             NSEnumerator *groupEnum = [groups objectEnumerator];
 
             ABGroup *group;
@@ -903,22 +919,8 @@ int main(int argc, char * const argv[])
         }
 
         NSArray *results = search(book, argc, argv);
-
-        // sort by last name, first name, organization
-        NSSortDescriptor *lastDescriptor, *firstDescriptor;
-        lastDescriptor = [[[NSSortDescriptor alloc]
-              initWithKey:@"Last"
-              ascending:YES
-          selector:@selector(localizedCaseInsensitiveCompare:)] autorelease];
-        firstDescriptor = [[[NSSortDescriptor alloc]
-              initWithKey:@"First"
-              ascending:YES
-          selector:@selector(localizedCaseInsensitiveCompare:)] autorelease];
- 
-        NSArray *sortDescriptors = [NSArray arrayWithObjects:lastDescriptor,
-                                                    firstDescriptor, nil];
-        NSArray *sortedResults = [results 
-                                sortedArrayUsingDescriptors:sortDescriptors];
+        NSString *keys[] = { @"Last", @"First", @"Organization" };
+        NSArray *sortedResults = sortBy(results, numElts(keys), keys);
 
         NSEnumerator *addressEnum = [sortedResults objectEnumerator];
 
