@@ -494,6 +494,8 @@ printField(Field *field, const char *label, int width, char *terminator,
 
 /*
  * Allocate and print a formatted name
+ * Uses nickname (if present) instead of first name
+ * Uses organization (if present) if none of nickname, first and last are present
  */
 void
 printFormattedName(char *terminator)
@@ -504,8 +506,14 @@ printFormattedName(char *terminator)
     {
         first = nickname;
     }
-    printField(&field[first], NULL, 0, " ", true);
-    printField(&field[lastname], NULL, 0, terminator, true);
+    if (field[first].value.generic || field[lastname].value.generic)
+    {
+        printField(&field[first], NULL, 0, " ", true);
+        printField(&field[lastname], NULL, 0, terminator, true);
+    } else if (field[organization].value.generic)
+    {
+        printField(&field[organization], NULL, 0, terminator, true);
+    }
 }
 
 /*
