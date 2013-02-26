@@ -79,8 +79,8 @@ Boolean uid = false;        // display/search records with uid?
 const char *uidStr = NULL;  // uid to search for 
 
 Preferred label = labelNone;                // use which label?
-DisplayForm displayForm = standardDisplay;  // type of display
-SearchFields searchFields = searchNames;    // type of search
+DisplayForm displayForm = standardDisplay;  // default type of display
+SearchFields searchFields = searchAll;      // default type of search
 
 typedef struct
 {
@@ -686,6 +686,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 {
     NSMutableArray *searchTerms = [NSMutableArray new];
 
+    // FIXME: add search for group
     int fieldLimit = (searchFields == searchNames) ? finalname : numFields;
 
     for (int i=0; i<numTerms; i++)
@@ -796,7 +797,7 @@ static struct option longopts[] =
 
      { "name",    no_argument,       NULL,           'n' },
      { "all",     no_argument,       NULL,           'a' },
-     { "group",   no_argument,       NULL,           'g' },
+     // FIXME { "group",   no_argument,       NULL,           'g' },
 
      { "help",    no_argument,       NULL,           'h' },
      { "uid",     optional_argument, NULL,           'u' },
@@ -823,9 +824,9 @@ usage(char *name)
       "  -l, --long     display records in long form",
       "  -r, --raw      display records in raw form",
       "",
-      "  -n, --name     search name fields only (default)",
-      "  -a, --all      search all Person fields",
-      "  -g, --group    search group name only",
+      "  -a, --all      search all Person fields (default)",
+      "  -n, --name     search name fields only",
+      // FIXME "  -g, --group    search group name only",
       "",
       "  -h, --help     this help",
       "  -u, --uid[=id] display unique ids; search for id if given",
@@ -871,6 +872,7 @@ int main(int argc, char * const argv[])
                 case 'r': displayForm = rawDisplay;      break;
 
                 case 'n': searchFields = searchNames; break;
+                case 'g': searchFields = searchGroups; break;
                 case 'a': searchFields = searchAll;   break;
 
                 case 'A': abGui = true; edit = false; break;
