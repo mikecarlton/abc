@@ -2,12 +2,12 @@
  * Simple AddressBook query CLI
  * Copyright 2012 Mike Carlton
  *
- * Released under terms of the MIT License: 
+ * Released under terms of the MIT License:
  * http://www.opensource.org/licenses/mit-license.php
  *
- * build: 
+ * build:
  * clang -framework Foundation -framework AddressBook -framework AppKit -Wall -o abc abc.m
- * Field names defined in 
+ * Field names defined in
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABGlobals.h
  *
  * Structures in
@@ -18,7 +18,7 @@
  *
  * TODO:
  * - sort results according to AB preference (if not specified):
- *      defaultNameOrdering 
+ *      defaultNameOrdering
  * - additional properties: social media, related dates
  *      kABInstantMessageProperty.
  *      kABOtherDatesProperty, kABMultiDateProperty
@@ -26,7 +26,7 @@
  * - ability to set primary email and address
  * - search dates
  * - search organization as part of name
- * - group search: 
+ * - group search:
  *      kABGroupNameProperty
  * - display as vcard
  * - escape urls via    (NSString *)
@@ -76,7 +76,7 @@ Boolean edit = false;       // gui address book in edit mode?
 
 int listGroups = false;     // list all groups?
 Boolean uid = false;        // display/search records with uid?
-const char *uidStr = NULL;  // uid to search for 
+const char *uidStr = NULL;  // uid to search for
 
 Preferred label = labelNone;                // use which label?
 DisplayForm displayForm = standardDisplay;  // default type of display
@@ -89,7 +89,7 @@ typedef struct
     int abType;
     int labelWidth;
     // int valueWidth;
-    union 
+    union
     {
         id generic;
         NSString *string;
@@ -98,7 +98,7 @@ typedef struct
     } value;
 } Field;
 
-enum 
+enum
 {
     firstname,
     middlename,
@@ -137,7 +137,7 @@ NSString *addressKey[numAddressKeys];
  * nsprintf utility (allows printf-like with NSString support)
  */
 void
-nsprintf(NSString *format, ...) 
+nsprintf(NSString *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -157,7 +157,7 @@ nsprintf(NSString *format, ...)
  */
 void init(Field *field, NSString **addressKey)
 {
-    Field fieldInit[] = 
+    Field fieldInit[] =
     {
         { "First Name",   kABFirstNameProperty,    kABStringProperty },
         { "Middle Name",  kABMiddleNameProperty,   kABStringProperty },
@@ -210,7 +210,7 @@ str(NSString *ns)
     return (s) ? s : "";
 }
 
-/* 
+/*
  * Allocate and return a cleaned up label
  * Standard (Apple defined) labels come out of AB like this: _$!<Work>!$_
  * User-defined labels are unadorned, e.g. Account
@@ -240,7 +240,7 @@ getValueWithLabel(ABMultiValue *multi, NSString *labelWanted)
     id result = nil;
     unsigned int count = [multi count];
 
-    for (unsigned int i = 0; i < count; i++) 
+    for (unsigned int i = 0; i < count; i++)
     {
         if ([labelWanted isEqualToString:[multi labelAtIndex:i]] == true)
         {
@@ -261,7 +261,7 @@ formattedAddress(NSDictionary *value, bool url)
 {
     static char buffer[1024];
 
-    snprintf(buffer, sizeof(buffer), "%s, %s %s %s", 
+    snprintf(buffer, sizeof(buffer), "%s, %s %s %s",
             str([value objectForKey: kABAddressStreetKey]),
             str([value objectForKey: kABAddressCityKey]),
             str([value objectForKey: kABAddressStateKey]),
@@ -295,7 +295,7 @@ getPreferredProperty(ABPerson *person, NSString *property, Preferred label)
     switch (label)
     {
         case labelNone:
-            identifier = [multi primaryIdentifier]; 
+            identifier = [multi primaryIdentifier];
             if (identifier)
             {
                 value = [multi valueForIdentifier:identifier];
@@ -323,17 +323,17 @@ getPreferredProperty(ABPerson *person, NSString *property, Preferred label)
     return value;
 }
 
-/* 
+/*
  * Open the specified URL
  */
-void 
+void
 openURL(NSString *url)
 {
     // stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
 }
 
-/* 
+/*
  * Open up a browser with the person's URL
  */
 void openInBrowser(ABPerson *person, Preferred label)
@@ -346,24 +346,24 @@ void openInBrowser(ABPerson *person, Preferred label)
     }
 }
 
-/* 
+/*
  * Open up a browser with the person's address mapped
  */
 void openInMapping(ABPerson *person, Preferred label)
 {
-    NSDictionary *address = getPreferredProperty(person, kABAddressProperty, 
+    NSDictionary *address = getPreferredProperty(person, kABAddressProperty,
                                                  label);
 
     if (address)
     {
         NSString *url = [NSString stringWithFormat:
-                            @"http://maps.google.com/maps?q=%s", 
+                            @"http://maps.google.com/maps?q=%s",
                             formattedAddress(address, true)];
         openURL(url);
     }
 }
 
-/* 
+/*
  * Open up the email application with a new message for person
  */
 void openInEmail(ABPerson *person, Preferred label)
@@ -378,17 +378,17 @@ void openInEmail(ABPerson *person, Preferred label)
     }
 }
 
-/* 
+/*
  * Open up the Address Book application with the person displayed
  * and optionally in edit mode
- * Reference: 
+ * Reference:
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABAddressBook.h
  */
 void openInAddressBook(ABPerson *person, Boolean edit)
 {
-    NSString *url = [NSString stringWithFormat:@"addressbook://%@%s", 
+    NSString *url = [NSString stringWithFormat:@"addressbook://%@%s",
                             [person uniqueId], edit ? "?edit" : ""];
-    
+
     openURL(url);
 }
 
@@ -407,7 +407,7 @@ void printNote(int labelWidth, const char *note)
         {
             printf("%*s: ", labelWidth, "");
         }
-        
+
         length = strlen(note);
         offset = strcspn(note, "\r\n");
 
@@ -425,7 +425,7 @@ const char *keyFrom(id value, NSString *key)
 }
 
 void
-printField(Field *field, const char *label, int width, char *terminator, 
+printField(Field *field, const char *label, int width, char *terminator,
            bool abbrev)
 {
     unsigned int count;
@@ -439,20 +439,20 @@ printField(Field *field, const char *label, int width, char *terminator,
     {
         case kABStringProperty:
             if (field->property == kABNoteProperty)  // multi-line string
-            {                                   
+            {
                 printNote(width, str(field->value.string));
             } else {                                   // simple string
                 printf("%s%s", str(field->value.string), terminator);
             }
             break;
         case kABDateProperty:
-            printf("%s%s", str([field->value.date 
+            printf("%s%s", str([field->value.date
                          descriptionWithCalendarFormat: @"%A, %B %e, %Y"
                          timeZone: nil locale: nil]), terminator);
             break;
         case kABMultiStringProperty:
             count = [field->value.multi count];
-            for (unsigned int j = 0; j < count; j++) 
+            for (unsigned int j = 0; j < count; j++)
             {
                 const char *value = str([field->value.multi valueAtIndex:j]);
                 const char *kind = str([field->value.multi labelAtIndex:j]);
@@ -468,7 +468,7 @@ printField(Field *field, const char *label, int width, char *terminator,
             break;
         case kABMultiDictionaryProperty:
             count = [field->value.multi count];
-            for (unsigned int j = 0; j < count; j++) 
+            for (unsigned int j = 0; j < count; j++)
             {
                 NSDictionary *value = [field->value.multi valueAtIndex:j];
                 const char *kind = str([field->value.multi labelAtIndex:j]);
@@ -478,7 +478,7 @@ printField(Field *field, const char *label, int width, char *terminator,
                 {
                     printf("%*s: ", width, "");
                 }
-                printf("%s, %s %s %s (%.*s)%s", 
+                printf("%s, %s %s %s (%.*s)%s",
                         str([value objectForKey: kABAddressStreetKey]),
                         str([value objectForKey: kABAddressCityKey]),
                         str([value objectForKey: kABAddressStateKey]),
@@ -536,11 +536,11 @@ displayBrief(void)
     };
 
     printFormattedName(" ");
-    
+
     // first of each phone type
     for (int i=0; i<numElts(phoneLabels); i++)
     {
-        NSString *s = getValueWithLabel(field[phone].value.multi, 
+        NSString *s = getValueWithLabel(field[phone].value.multi,
                                         phoneLabels[i]);
         if (s)
         {
@@ -553,7 +553,7 @@ displayBrief(void)
     // first of each email type
     for (int i=0; i<numElts(emailLabels); i++)
     {
-        NSString *s = getValueWithLabel(field[email].value.multi, 
+        NSString *s = getValueWithLabel(field[email].value.multi,
                                         emailLabels[i]);
         if (s)
         {
@@ -566,7 +566,7 @@ displayBrief(void)
     printf("\n");
 }
 
-void 
+void
 displayRaw(ABRecord *record)
 {
     printf("%s\n", str([record description]));
@@ -576,7 +576,7 @@ displayRaw(ABRecord *record)
 /*
  * Display one group record
  */
-void 
+void
 displayGroup(ABGroup *group, DisplayForm form)
 {
     if (form == rawDisplay)
@@ -602,11 +602,11 @@ displayGroup(ABGroup *group, DisplayForm form)
     {
         NSEnumerator *membersEnum = [members objectEnumerator];
         ABPerson *person;
-        while (person = (ABPerson *)[membersEnum nextObject]) 
+        while (person = (ABPerson *)[membersEnum nextObject])
         {
             for (unsigned int i=0; i<finalname; i++)
             {
-                field[i].value.string = [person 
+                field[i].value.string = [person
                         valueForProperty:field[i].property];
             }
             printf("\t");
@@ -620,7 +620,7 @@ displayGroup(ABGroup *group, DisplayForm form)
 /*
  * Display one person record
  */
-void 
+void
 display(ABPerson *person, DisplayForm form)
 {
     if (form == rawDisplay)
@@ -640,7 +640,7 @@ display(ABPerson *person, DisplayForm form)
 
         field[i].value.generic = [person valueForProperty:field[i].property];
 
-        int width = (form == standardDisplay && i <= finalname ) ? 
+        int width = (form == standardDisplay && i <= finalname ) ?
                         strlen("Name") : field[i].labelWidth;
         if (field[i].value.generic && width > labelWidth)
         {
@@ -683,7 +683,7 @@ display(ABPerson *person, DisplayForm form)
     if (uid)
     {
         const char *uidStr = str([person valueForProperty:kABUIDProperty]);
-        printf("%*s: %.*s\n", labelWidth, "UID", 
+        printf("%*s: %.*s\n", labelWidth, "UID",
                (int)(rindex(uidStr, ':') - uidStr), uidStr);
     }
 
@@ -699,7 +699,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 
     for (int i=0; i<numTerms; i++)
     {
-        NSString *key = [NSString stringWithCString:term[i] 
+        NSString *key = [NSString stringWithCString:term[i]
                                     encoding: NSUTF8StringEncoding];
         NSMutableArray *searchRecord = [NSMutableArray new];
 
@@ -707,7 +707,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
         for (unsigned int j=0; j<fieldLimit; j++)
         {
 #if 1
-            [searchRecord addObject: 
+            [searchRecord addObject:
                 [ABPerson searchElementForProperty:field[j].property
                     label:nil       /* use this to filter Home v. Work */
                     //label:kABAddressHomeLabel
@@ -719,7 +719,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
             {
                 case kABStringProperty:
                 case kABMultiStringProperty:    /* may differ for filtering */
-                    [searchRecord addObject: 
+                    [searchRecord addObject:
                         [ABPerson searchElementForProperty:field[j].property
                             label:nil       /* use this to filter Home v. Work */
                             key:nil
@@ -736,7 +736,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 #endif
         }
 
-        [searchTerms addObject: [ABSearchElement 
+        [searchTerms addObject: [ABSearchElement
                                     searchElementForConjunction:kABSearchOr
                                     children:searchRecord]];
     }
@@ -744,9 +744,9 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
     /* if a UID is given, require it to match also */
     if (uidStr)
     {
-        [searchTerms addObject: 
+        [searchTerms addObject:
             [ABPerson searchElementForProperty:kABUIDProperty
-                            label:nil       
+                            label:nil
                             key:nil
                             value: [NSString stringWithCString:uidStr
                                              encoding: NSUTF8StringEncoding]
@@ -754,7 +754,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
     }
 
     /* search all records for each term */
-    ABSearchElement *search = [ABSearchElement 
+    ABSearchElement *search = [ABSearchElement
                                 searchElementForConjunction:kABSearchAnd
                                 children:searchTerms];
 
@@ -768,7 +768,7 @@ NSArray *
 sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
 {
     NSMutableArray *descriptors = [NSMutableArray new];
-    
+
     for (unsigned int i=0; i<numKeys; i++)
     {
         [descriptors addObject: [[NSSortDescriptor alloc]
@@ -782,8 +782,8 @@ sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
 
 /*
     search filters:
-        first F 
-        first L 
+        first F
+        first L
         notes N
         email M
         city C
@@ -793,10 +793,10 @@ sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
  */
 
 /*
- * Summarize program usage 
+ * Summarize program usage
  */
 static const char *options = ":sblrnaghuAEMUHW";
-static struct option longopts[] = 
+static struct option longopts[] =
 {
      { "std",     no_argument,       NULL,           's' },
      { "brief",   no_argument,       NULL,           'b' },
@@ -822,7 +822,7 @@ static struct option longopts[] =
      { NULL,      0,                 NULL,           0 }
 };
 
-static void 
+static void
 usage(char *name)
 {
     int i;
@@ -850,7 +850,7 @@ usage(char *name)
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
-    for (i=0; i<numElts(help); i++) 
+    for (i=0; i<numElts(help); i++)
     {
         fprintf(stderr, "%s\n", help[i]);
     }
@@ -860,19 +860,19 @@ usage(char *name)
 
 int main(int argc, char * const argv[])
 {
-    @autoreleasepool 
+    @autoreleasepool
     {
         char *programName = argv[0];
 
         int opt;
-        while ((opt = getopt_long(argc, argv, options, longopts, NULL)) >= 0) 
+        while ((opt = getopt_long(argc, argv, options, longopts, NULL)) >= 0)
         {
             if (opt == 0)
             {
                 continue;       // long opt only
             }
 
-            switch (opt) 
+            switch (opt)
             {
                 case 's': displayForm = standardDisplay; break;
                 case 'b': displayForm = briefDisplay;    break;
@@ -912,7 +912,7 @@ int main(int argc, char * const argv[])
         init(field, addressKey);
 
         ABAddressBook *book = [ABAddressBook sharedAddressBook];
-        
+
         if (listGroups)
         {
             NSString *keys[] = { @"GroupName" };
@@ -920,7 +920,7 @@ int main(int argc, char * const argv[])
             NSEnumerator *groupEnum = [groups objectEnumerator];
 
             ABGroup *group;
-            while (group = (ABGroup *)[groupEnum nextObject]) 
+            while (group = (ABGroup *)[groupEnum nextObject])
             {
                 displayGroup(group, displayForm);
             }
@@ -935,7 +935,7 @@ int main(int argc, char * const argv[])
         NSEnumerator *addressEnum = [sortedResults objectEnumerator];
 
         ABPerson *person;
-        while (person = (ABPerson *)[addressEnum nextObject]) 
+        while (person = (ABPerson *)[addressEnum nextObject])
         {
             display(person, displayForm);
             if (abGui)
