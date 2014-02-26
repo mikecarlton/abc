@@ -1,5 +1,5 @@
 /*
- * Simple AddressBook query CLI
+ * Simple Contacts (AddressBook) query CLI
  * Copyright 2012 Mike Carlton
  *
  * Released under terms of the MIT License:
@@ -68,12 +68,12 @@ typedef enum
     searchAll,
 } SearchFields;
 
-static Boolean urlGui = false;     // open browser gui with URL?
-static Boolean emailGui = false;   // open gui email?
+static Boolean urlGui = false;        // open browser gui with URL?
+static Boolean emailGui = false;      // open gui email?
 static Boolean googleMapsGui = false; // open gui google maps?
-static Boolean mapsGui = false;    // open gui maps?
-static Boolean abGui = false;      // open gui address book?
-static Boolean edit = false;       // gui address book in edit mode?
+static Boolean mapsGui = false;       // open gui maps?
+static Boolean contactsGui = false;   // open gui address book?
+static Boolean edit = false;          // gui address book in edit mode?
 
 static int listGroups = false;     // list all groups?
 static Boolean uid = false;        // display/search records with uid?
@@ -383,13 +383,13 @@ openInEmail(ABPerson *person, Preferred label)
 }
 
 /*
- * Open up the Address Book application with the person displayed
+ * Open up the Contacts application with the person displayed
  * and optionally in edit mode
  * Reference:
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABAddressBook.h
  */
 static void
-openInAddressBook(ABPerson *person, Boolean edit)
+openInContacts(ABPerson *person, Boolean edit)
 {
     NSString *url = [NSString stringWithFormat:@"addressbook://%@%s",
                             [person uniqueId], edit ? "?edit" : ""];
@@ -796,7 +796,7 @@ sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
 /*
  * Summarize program usage
  */
-static const char *options = ":sblrnaghuAEGMUHW";
+static const char *options = ":sblrnaghuCEGMUHW";
 static struct option longopts[] =
 {
      { "std",     no_argument,       NULL,           's' },
@@ -813,12 +813,14 @@ static struct option longopts[] =
 
      { "groups",  no_argument,       &listGroups,     1 },
 
-     { "address", no_argument,       NULL,           'A' },
-     { "email",   no_argument,       NULL,           'E' },
-     { "map",     no_argument,       NULL,           'M' },
-     { "url",     no_argument,       NULL,           'U' },
-     { "home",    no_argument,       NULL,           'H' },
-     { "work",    no_argument,       NULL,           'W' },
+     { "contacts", no_argument,       NULL,           'C' },
+     { "email",    no_argument,       NULL,           'E' },
+     { "google",   no_argument,       NULL,           'G' },
+     { "maps",     no_argument,       NULL,           'M' },
+     { "url",      no_argument,       NULL,           'U' },
+
+     { "home",     no_argument,       NULL,           'H' },
+     { "work",     no_argument,       NULL,           'W' },
 
      { NULL,      0,                 NULL,           0 }
 };
@@ -841,7 +843,7 @@ usage(char *name)
       "",
       "      --groups   list all groups",
       "",
-      "  -A, --address  open Address Book with person",
+      "  -C, --contacts open Contacts with person",
       "  -E, --email    open email application with message for person",
       "  -G, --google   open google maps in browser to address of person",
       "  -M, --maps     open Maps with address of person",
@@ -884,7 +886,7 @@ int main(int argc, char * const argv[])
                 case 'g': searchFields = searchGroups; break;
                 case 'a': searchFields = searchAll;   break;
 
-                case 'A': abGui = true; edit = false; break;
+                case 'C': contactsGui = true; edit = false; break;
                 case 'E': emailGui = true;            break;
                 case 'M': mapsGui = true;             break;
                 case 'G': googleMapsGui = true;       break;
@@ -939,9 +941,9 @@ int main(int argc, char * const argv[])
         while ((person = (ABPerson *)[addressEnum nextObject]))
         {
             display(person, displayForm);
-            if (abGui)
+            if (contactsGui)
             {
-                openInAddressBook(person, edit);
+                openInContacts(person, edit);
                 break;
             }
             if (urlGui)
