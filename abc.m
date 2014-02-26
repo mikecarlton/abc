@@ -6,7 +6,9 @@
  * http://www.opensource.org/licenses/mit-license.php
  *
  * build:
- * clang -framework Foundation -framework AddressBook -framework AppKit -Wall -o abc abc.m
+   clang -framework Foundation -framework AddressBook -framework AppKit \
+     -Wall -Werror -Weverything -Wno-format-nonliteral -Wno-missing-field-initializers -Wno-shadow \
+     -o abc abc.m
  * Field names defined in
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABGlobals.h
  *
@@ -42,8 +44,6 @@
 #include <getopt.h>
 
 #define numElts(array) (sizeof(array)/sizeof(*array))
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
 #define plural(n) ((n) == 1 ? "" : "s")
 #define eplural(n) ((n) == 1 ? "" : "es")
 
@@ -68,19 +68,19 @@ typedef enum
     searchAll,
 } SearchFields;
 
-Boolean urlGui = false;     // open browser gui with URL?
-Boolean emailGui = false;   // open gui email?
-Boolean mapGui = false;     // open gui map?
-Boolean abGui = false;      // open gui address book?
-Boolean edit = false;       // gui address book in edit mode?
+static Boolean urlGui = false;     // open browser gui with URL?
+static Boolean emailGui = false;   // open gui email?
+static Boolean mapGui = false;     // open gui map?
+static Boolean abGui = false;      // open gui address book?
+static Boolean edit = false;       // gui address book in edit mode?
 
-int listGroups = false;     // list all groups?
-Boolean uid = false;        // display/search records with uid?
-const char *uidStr = NULL;  // uid to search for
+static int listGroups = false;     // list all groups?
+static Boolean uid = false;        // display/search records with uid?
+static const char *uidStr = NULL;  // uid to search for
 
-Preferred label = labelNone;                // use which label?
-DisplayForm displayForm = standardDisplay;  // default type of display
-SearchFields searchFields = searchAll;      // default type of search
+static Preferred label = labelNone;                // use which label?
+static DisplayForm displayForm = standardDisplay;  // default type of display
+static SearchFields searchFields = searchAll;      // default type of search
 
 typedef struct
 {
@@ -118,7 +118,7 @@ enum
     numFields,
 };
 
-Field field[numFields];
+static Field field[numFields];
 
 enum
 {
@@ -136,7 +136,8 @@ static NSString *addressKey[numAddressKeys];
 /*
  * Initialize the fields
  */
-void init(Field *field, NSString **addressKey)
+static void
+init(Field *field, NSString **addressKey)
 {
     Field fieldInit[] =
     {
@@ -156,10 +157,10 @@ void init(Field *field, NSString **addressKey)
         { "Note",         kABNoteProperty,         kABStringProperty },
     };
 
-    for (int i=0; i<numElts(fieldInit); i++, field++)
+    for (unsigned int i=0; i<numElts(fieldInit); i++, field++)
     {
         *field = fieldInit[i];
-        field->labelWidth = strlen(field->label);
+        field->labelWidth = (int)strlen(field->label);
     }
 
     NSString *addressInit[] =
@@ -172,13 +173,13 @@ void init(Field *field, NSString **addressKey)
         kABAddressCountryCodeKey,
     };
 
-    for (int i=0; i<numElts(addressInit); i++, addressKey++)
+    for (unsigned int i=0; i<numElts(addressInit); i++, addressKey++)
     {
         *addressKey = addressInit[i];
     }
 }
 
-const char *
+static const char *
 str(NSString *ns)
 {
     const char *s = NULL;
@@ -196,7 +197,8 @@ str(NSString *ns)
  * Standard (Apple defined) labels come out of AB like this: _$!<Work>!$_
  * User-defined labels are unadorned, e.g. Account
  */
-const char *cleanLabel(const char *label)
+static const char *
+cleanLabel(const char *label)
 {
     const char *kind;
 
@@ -204,7 +206,7 @@ const char *cleanLabel(const char *label)
     const char *end = rindex(label, '>');
     if (start && end && end > start)
     {
-        kind = strndup(start+1, end-start-1);
+        kind = strndup(start+1, (size_t)(end-start-1));
     } else {
         kind = strdup(label);
     }
@@ -215,11 +217,11 @@ const char *cleanLabel(const char *label)
 /*
  * returns first value with matching label
  */
-id
+static id
 getValueWithLabel(ABMultiValue *multi, NSString *labelWanted)
 {
     id result = nil;
-    unsigned int count = [multi count];
+    unsigned long count = [multi count];
 
     for (unsigned int i = 0; i < count; i++)
     {
@@ -237,7 +239,7 @@ getValueWithLabel(ABMultiValue *multi, NSString *labelWanted)
  * Format and return a formatted address
  * FIXME: use formattedAddressFromDictionary
  */
-char *
+static char *
 formattedAddress(NSDictionary *value, bool url)
 {
     static char buffer[1024];
@@ -266,7 +268,7 @@ formattedAddress(NSDictionary *value, bool url)
  * if preferred is none, return first match of primary, home, work
  * else return first match of home or work as requested
  */
-id
+static id
 getPreferredProperty(ABPerson *person, NSString *property, Preferred label)
 {
     ABMultiValue *multi = [person valueForProperty:property];
@@ -297,8 +299,6 @@ getPreferredProperty(ABPerson *person, NSString *property, Preferred label)
         case labelWork:
             value = getValueWithLabel(multi, kABWorkLabel);
             break;
-        default:
-            break;
     }
 
     return value;
@@ -307,7 +307,7 @@ getPreferredProperty(ABPerson *person, NSString *property, Preferred label)
 /*
  * Open the specified URL
  */
-void
+static void
 openURL(NSString *url)
 {
     // stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding
@@ -317,7 +317,8 @@ openURL(NSString *url)
 /*
  * Open up a browser with the person's URL
  */
-void openInBrowser(ABPerson *person, Preferred label)
+static void
+openInBrowser(ABPerson *person, Preferred label)
 {
     NSString *url = getPreferredProperty(person, kABURLsProperty, label);
 
@@ -330,7 +331,8 @@ void openInBrowser(ABPerson *person, Preferred label)
 /*
  * Open up a browser with the person's address mapped
  */
-void openInMapping(ABPerson *person, Preferred label)
+static void
+openInMapping(ABPerson *person, Preferred label)
 {
     NSDictionary *address = getPreferredProperty(person, kABAddressProperty,
                                                  label);
@@ -347,7 +349,8 @@ void openInMapping(ABPerson *person, Preferred label)
 /*
  * Open up the email application with a new message for person
  */
-void openInEmail(ABPerson *person, Preferred label)
+static void
+openInEmail(ABPerson *person, Preferred label)
 {
     NSString *email = getPreferredProperty(person, kABEmailProperty, label);
 
@@ -365,7 +368,8 @@ void openInEmail(ABPerson *person, Preferred label)
  * Reference:
  * /System/Library/Frameworks/AddressBook.framework/Versions/A/Headers/ABAddressBook.h
  */
-void openInAddressBook(ABPerson *person, Boolean edit)
+static void
+openInAddressBook(ABPerson *person, Boolean edit)
 {
     NSString *url = [NSString stringWithFormat:@"addressbook://%@%s",
                             [person uniqueId], edit ? "?edit" : ""];
@@ -376,10 +380,11 @@ void openInAddressBook(ABPerson *person, Boolean edit)
 /*
  * Print a multi-line value, label for first line is already printed
  */
-void printNote(int labelWidth, const char *note)
+static void
+printNote(int labelWidth, const char *note)
 {
     Boolean first = true;
-    int length, offset;
+    size_t length, offset;
 
     const char *end = note + strlen(note);
     while (note < end)
@@ -392,7 +397,7 @@ void printNote(int labelWidth, const char *note)
         length = strlen(note);
         offset = strcspn(note, "\r\n");
 
-        printf("%.*s\n", offset, note);
+        printf("%.*s\n", (int)offset, note);
         note += offset;
         note++;
         first = false;
@@ -403,7 +408,7 @@ static void
 printField(Field *field, const char *label, int width, char *terminator,
            bool abbrev)
 {
-    unsigned int count;
+    unsigned long count;
 
     if (label)
     {
@@ -472,7 +477,7 @@ printField(Field *field, const char *label, int width, char *terminator,
  * Uses nickname (if present) instead of first name
  * Uses organization (if present) if none of nickname, first and last are present
  */
-void
+static void
 printFormattedName(char *terminator)
 {
     int first = firstname;
@@ -494,7 +499,7 @@ printFormattedName(char *terminator)
 /*
  * Display person in brief format
  */
-void
+static void
 displayBrief(void)
 {
     NSString *phoneLabels[] =
@@ -513,7 +518,7 @@ displayBrief(void)
     printFormattedName(" ");
 
     // first of each phone type
-    for (int i=0; i<numElts(phoneLabels); i++)
+    for (unsigned int i=0; i<numElts(phoneLabels); i++)
     {
         NSString *s = getValueWithLabel(field[phone].value.multi,
                                         phoneLabels[i]);
@@ -526,7 +531,7 @@ displayBrief(void)
     }
 
     // first of each email type
-    for (int i=0; i<numElts(emailLabels); i++)
+    for (unsigned int i=0; i<numElts(emailLabels); i++)
     {
         NSString *s = getValueWithLabel(field[email].value.multi,
                                         emailLabels[i]);
@@ -541,7 +546,7 @@ displayBrief(void)
     printf("\n");
 }
 
-void
+static void
 displayRaw(ABRecord *record)
 {
     printf("%s\n", str([record description]));
@@ -551,7 +556,7 @@ displayRaw(ABRecord *record)
 /*
  * Display one group record
  */
-void
+static void
 displayGroup(ABGroup *group, DisplayForm form)
 {
     if (form == rawDisplay)
@@ -570,14 +575,14 @@ displayGroup(ABGroup *group, DisplayForm form)
     }
 
     NSArray *members = [group members];
-    int length = [members count];
-    printf(" (%d member%s)\n", length, plural(length));
+    unsigned long length = [members count];
+    printf(" (%lu member%s)\n", length, plural(length));
 
     if (form == longDisplay)
     {
         NSEnumerator *membersEnum = [members objectEnumerator];
         ABPerson *person;
-        while (person = (ABPerson *)[membersEnum nextObject])
+        while ((person = (ABPerson *)[membersEnum nextObject]))
         {
             for (unsigned int i=0; i<finalname; i++)
             {
@@ -595,7 +600,7 @@ displayGroup(ABGroup *group, DisplayForm form)
 /*
  * Display one person record
  */
-void
+static void
 display(ABPerson *person, DisplayForm form)
 {
     if (form == rawDisplay)
@@ -665,7 +670,8 @@ display(ABPerson *person, DisplayForm form)
     printf("\n");
 }
 
-NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
+static NSArray *
+search(ABAddressBook *book, int numTerms, char * const term[])
 {
     NSMutableArray *searchTerms = [NSMutableArray new];
 
@@ -679,7 +685,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
         NSMutableArray *searchRecord = [NSMutableArray new];
 
         /* look for term in name or all fields */
-        for (unsigned int j=0; j<fieldLimit; j++)
+        for (int j=0; j<fieldLimit; j++)
         {
 #if 1
             [searchRecord addObject:
@@ -739,7 +745,7 @@ NSArray *search(ABAddressBook *book, int numTerms, char * const term[])
 /*
  * Returns a new array sorted by keys
  */
-NSArray *
+static NSArray *
 sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
 {
     NSMutableArray *descriptors = [NSMutableArray new];
@@ -797,10 +803,9 @@ static struct option longopts[] =
      { NULL,      0,                 NULL,           0 }
 };
 
-static void
+static void __attribute__ ((noreturn))
 usage(char *name)
 {
-    int i;
     static char *help[] = {
       "  -s, --std      display records in standard form (default)",
       "  -b, --brief    display records in brief form",
@@ -825,7 +830,7 @@ usage(char *name)
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
-    for (i=0; i<numElts(help); i++)
+    for (unsigned i=0; i<numElts(help); i++)
     {
         fprintf(stderr, "%s\n", help[i]);
     }
@@ -871,7 +876,6 @@ int main(int argc, char * const argv[])
                 case 'h':
                 default:
                     usage(programName);
-                    break;
             }
         }
 
@@ -895,7 +899,7 @@ int main(int argc, char * const argv[])
             NSEnumerator *groupEnum = [groups objectEnumerator];
 
             ABGroup *group;
-            while (group = (ABGroup *)[groupEnum nextObject])
+            while ((group = (ABGroup *)[groupEnum nextObject]))
             {
                 displayGroup(group, displayForm);
             }
@@ -910,7 +914,7 @@ int main(int argc, char * const argv[])
         NSEnumerator *addressEnum = [sortedResults objectEnumerator];
 
         ABPerson *person;
-        while (person = (ABPerson *)[addressEnum nextObject])
+        while ((person = (ABPerson *)[addressEnum nextObject]))
         {
             display(person, displayForm);
             if (abGui)
