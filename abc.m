@@ -70,7 +70,8 @@ typedef enum
 
 static Boolean urlGui = false;     // open browser gui with URL?
 static Boolean emailGui = false;   // open gui email?
-static Boolean mapGui = false;     // open gui map?
+static Boolean googleMapsGui = false; // open gui google maps?
+static Boolean mapsGui = false;    // open gui maps?
 static Boolean abGui = false;      // open gui address book?
 static Boolean edit = false;       // gui address book in edit mode?
 
@@ -329,10 +330,10 @@ openInBrowser(ABPerson *person, Preferred label)
 }
 
 /*
- * Open up a browser with the person's address mapped
+ * Open given mapping url
  */
 static void
-openInMapping(ABPerson *person, Preferred label)
+openInMappingProvider(ABPerson *person, Preferred label, const char *provider)
 {
     NSDictionary *address = getPreferredProperty(person, kABAddressProperty,
                                                  label);
@@ -340,10 +341,29 @@ openInMapping(ABPerson *person, Preferred label)
     if (address)
     {
         NSString *url = [NSString stringWithFormat:
-                            @"http://maps.google.com/maps?q=%s",
+                            @"http://maps.%s.com/maps?q=%s",
+                            provider,
                             formattedAddress(address, true)];
         openURL(url);
     }
+}
+
+/*
+ * Open up a browser with the person's address in Google Maps
+ */
+static void
+openInGoogleMapping(ABPerson *person, Preferred label)
+{
+    openInMappingProvider(person, label, "google");
+}
+
+/*
+ * Open Maps application with the person's address mapped
+ */
+static void
+openInMapping(ABPerson *person, Preferred label)
+{
+    openInMappingProvider(person, label, "apple");
 }
 
 /*
@@ -776,7 +796,7 @@ sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
 /*
  * Summarize program usage
  */
-static const char *options = ":sblrnaghuAEMUHW";
+static const char *options = ":sblrnaghuAEGMUHW";
 static struct option longopts[] =
 {
      { "std",     no_argument,       NULL,           's' },
@@ -823,7 +843,8 @@ usage(char *name)
       "",
       "  -A, --address  open Address Book with person",
       "  -E, --email    open email application with message for person",
-      "  -M, --map      open map application with address of person",
+      "  -G, --google   open google maps in browser to address of person",
+      "  -M, --maps     open Maps with address of person",
       "  -U, --url      open browser with URL of person",
       "  -H, --home     use 'home' values for gui",
       "  -W, --work     use 'work' values for gui",
@@ -865,7 +886,8 @@ int main(int argc, char * const argv[])
 
                 case 'A': abGui = true; edit = false; break;
                 case 'E': emailGui = true;            break;
-                case 'M': mapGui = true;              break;
+                case 'M': mapsGui = true;             break;
+                case 'G': googleMapsGui = true;       break;
                 case 'U': urlGui = true;              break;
 
                 case 'H': label = labelHome; break;
@@ -927,7 +949,12 @@ int main(int argc, char * const argv[])
                 openInBrowser(person, label);
                 break;
             }
-            if (mapGui)
+            if (googleMapsGui)
+            {
+                openInGoogleMapping(person, label);
+                break;
+            }
+            if (mapsGui)
             {
                 openInMapping(person, label);
                 break;
