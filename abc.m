@@ -131,26 +131,7 @@ enum
     numAddressKeys,
 };
 
-NSString *addressKey[numAddressKeys];
-
-/*
- * nsprintf utility (allows printf-like with NSString support)
- */
-void
-nsprintf(NSString *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    NSString *formattedStr = [[NSString alloc] initWithFormat: format
-                                                  arguments: args];
-    va_end(args);
-
-    NSFileHandle *output = [NSFileHandle fileHandleWithStandardOutput];
-    [output writeData: [formattedStr dataUsingEncoding: NSNEXTSTEPStringEncoding]];
-//    [[NSFileHandle fileHandleWithStandardOutput]
-//        writeData: [formattedStr dataUsingEncoding: NSNEXTSTEPStringEncoding]];
-    [formattedStr release];
-}
+static NSString *addressKey[numAddressKeys];
 
 /*
  * Initialize the fields
@@ -418,13 +399,7 @@ void printNote(int labelWidth, const char *note)
     }
 }
 
-// convenience method to extract proper C string from NSDictionary
-const char *keyFrom(id value, NSString *key)
-{
-    return str([value objectForKey: key]);
-}
-
-void
+static void
 printField(Field *field, const char *label, int width, char *terminator,
            bool abbrev)
 {
