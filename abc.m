@@ -1,6 +1,6 @@
 /*
  * Simple Contacts (AddressBook) query CLI
- * Copyright 2012 Mike Carlton
+ * Copyright 2012-2014 Mike Carlton
  *
  * Released under terms of the MIT License:
  * http://www.opensource.org/licenses/mit-license.php
