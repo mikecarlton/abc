@@ -55,6 +55,7 @@ typedef enum {
 
 typedef enum
 {
+    plainDisplay,
     standardDisplay,
     briefDisplay,
     longDisplay,
@@ -633,7 +634,7 @@ display(ABPerson *person, DisplayForm form)
     int labelWidth = 0;
     for (unsigned int i=0; i<numFields; i++)
     {
-        if (form == standardDisplay && i > email)   // stop here for standard
+        if (form <= standardDisplay && i > email)   // stop here for standard
         {
             break;
         }
@@ -663,20 +664,24 @@ display(ABPerson *person, DisplayForm form)
             continue;
         }
 
-        if (form == standardDisplay && i > email)   // stop here for standard
+        if (form <= standardDisplay && i > email)   // stop here for standard
         {
             break;
         }
 
-        if (form == standardDisplay && i <= finalname)  // print formatted name
+        if (form <= standardDisplay && i <= finalname)  // print formatted name
         {
-            printf("%*s: ", labelWidth, "Name");
+            if (form != plainDisplay)
+            {
+                printf("%*s: ", labelWidth, "Name");
+            }
             printFormattedName("\n");
             i = finalname;                          // skip other name fields
         }
         else
         {
-            printField(&field[i], field[i].label, labelWidth, "\n", false);
+            printField(&field[i], form == plainDisplay ? NULL : field[i].label,
+                       labelWidth, "\n", false);
         }
     }
 
@@ -796,11 +801,12 @@ sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
 /*
  * Summarize program usage
  */
-static const char *options = ":sblrnaghuCEGMUHW";
+static const char *options = ":spblrnaghuCEGMUHW";
 static struct option longopts[] =
 {
      { "std",     no_argument,       NULL,           's' },
      { "brief",   no_argument,       NULL,           'b' },
+     { "plain",   no_argument,       NULL,           'p' },
      { "long",    no_argument,       NULL,           'l' },
      { "raw",     no_argument,       NULL,           'r' },
 
@@ -830,6 +836,7 @@ usage(char *name)
 {
     static char *help[] = {
       "  -s, --std      display records in standard form (default)",
+      "  -p, --plain    display records in plain (no labels) form",
       "  -b, --brief    display records in brief form",
       "  -l, --long     display records in long form",
       "  -r, --raw      display records in raw form",
@@ -878,6 +885,7 @@ int main(int argc, char * const argv[])
             switch (opt)
             {
                 case 's': displayForm = standardDisplay; break;
+                case 'p': displayForm = plainDisplay;    break;
                 case 'b': displayForm = briefDisplay;    break;
                 case 'l': displayForm = longDisplay;     break;
                 case 'r': displayForm = rawDisplay;      break;
