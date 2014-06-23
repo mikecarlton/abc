@@ -116,6 +116,7 @@ enum
     url,
     birthday,
     related,
+    social,
     note,
     numFields,
 };
@@ -143,20 +144,21 @@ init(Field *field, NSString **addressKey)
 {
     Field fieldInit[] =
     {
-        { "First Name",   kABFirstNameProperty,    kABStringProperty },
-        { "Middle Name",  kABMiddleNameProperty,   kABStringProperty },
-        { "Last Name",    kABLastNameProperty,     kABStringProperty },
-        { "Nickname",     kABNicknameProperty,     kABStringProperty },
-        { "Maiden Name",  kABMaidenNameProperty,   kABStringProperty },
-        { "Organization", kABOrganizationProperty, kABStringProperty },
-        { "Address",      kABAddressProperty,      kABMultiDictionaryProperty },
-        { "Phone",        kABPhoneProperty,        kABMultiStringProperty },
-        { "Email",        kABEmailProperty,        kABMultiStringProperty },
-        { "Job Title",    kABJobTitleProperty,     kABStringProperty },
-        { "URL",          kABURLsProperty,         kABMultiStringProperty },
-        { "Birthday",     kABBirthdayProperty,     kABDateProperty },
-        { "Related",      kABRelatedNamesProperty, kABMultiStringProperty },
-        { "Note",         kABNoteProperty,         kABStringProperty },
+        { "First Name",   kABFirstNameProperty,     kABStringProperty },
+        { "Middle Name",  kABMiddleNameProperty,    kABStringProperty },
+        { "Last Name",    kABLastNameProperty,      kABStringProperty },
+        { "Nickname",     kABNicknameProperty,      kABStringProperty },
+        { "Maiden Name",  kABMaidenNameProperty,    kABStringProperty },
+        { "Organization", kABOrganizationProperty,  kABStringProperty },
+        { "Address",      kABAddressProperty,       kABMultiDictionaryProperty },
+        { "Phone",        kABPhoneProperty,         kABMultiStringProperty },
+        { "Email",        kABEmailProperty,         kABMultiStringProperty },
+        { "Job Title",    kABJobTitleProperty,      kABStringProperty },
+        { "URL",          kABURLsProperty,          kABMultiStringProperty },
+        { "Birthday",     kABBirthdayProperty,      kABDateProperty },
+        { "Related",      kABRelatedNamesProperty,  kABMultiStringProperty },
+        { "Social",       kABSocialProfileProperty, kABMultiDictionaryProperty },
+        { "Note",         kABNoteProperty,          kABStringProperty },
     };
 
     for (unsigned int i=0; i<numElts(fieldInit); i++, field++)
@@ -431,14 +433,14 @@ printField(Field *field, const char *label, int width, char *terminator,
 {
     unsigned long count;
 
-    if (label)
-    {
-        printf("%*s: ", width, label);  // if requested, label on 1st line only
-    }
-
     switch (field->abType)
     {
         case kABStringProperty:
+            if (label)              // if requested, label on 1st line only
+            {
+                printf("%*s: ", width, label);
+            }
+
             if (field->property == kABNoteProperty)  // multi-line string
             {
                 printNote(width, str(field->value.string));
@@ -447,6 +449,10 @@ printField(Field *field, const char *label, int width, char *terminator,
             }
             break;
         case kABDateProperty:
+            if (label)              // if requested, label on 1st line only
+            {
+                printf("%*s: ", width, label);
+            }
             printf("%s%s", str([field->value.date
                          descriptionWithCalendarFormat: @"%A, %B %e, %Y"
                          timeZone: nil locale: nil]), terminator);
@@ -458,10 +464,10 @@ printField(Field *field, const char *label, int width, char *terminator,
                 const char *value = str([field->value.multi valueAtIndex:j]);
                 const char *kind = str([field->value.multi labelAtIndex:j]);
 
-                kind = cleanLabel(kind);  // returns a duplicate, must free
-                if (label && j > 0)       // multiple values
+                kind = cleanLabel(kind);    // returns a duplicate, must free
+                if (label)      // if requested, label on 1st line only
                 {
-                    printf("%*s: ", width, "");
+                    printf("%*s: ", width, (j == 0) ? label : "");
                 }
                 printf("%s (%.*s)%s", value, abbrev ? 1 : -1, kind, terminator);
                 free((void *)kind);
@@ -469,23 +475,43 @@ printField(Field *field, const char *label, int width, char *terminator,
             break;
         case kABMultiDictionaryProperty:
             count = [field->value.multi count];
-            for (unsigned int j = 0; j < count; j++)
-            {
-                NSDictionary *value = [field->value.multi valueAtIndex:j];
-                const char *kind = str([field->value.multi labelAtIndex:j]);
 
-                kind = cleanLabel(kind);  // returns a duplicate
-                if (label && j > 0)       // multiple values
+            if (field->property == kABAddressProperty)
+            {
+                for (unsigned int j = 0; j < count; j++)
                 {
-                    printf("%*s: ", width, "");
+                    NSDictionary *value = [field->value.multi valueAtIndex:j];
+                    const char *kind = str([field->value.multi labelAtIndex:j]);
+
+                    kind = cleanLabel(kind);  // returns a duplicate
+                    if (label)      // if requested, label on 1st line only
+                    {
+                        printf("%*s: ", width, (j == 0) ? label : "");
+                    }
+                    printf("%s, %s %s %s (%.*s)%s",
+                            str([value objectForKey: kABAddressStreetKey]),
+                            str([value objectForKey: kABAddressCityKey]),
+                            str([value objectForKey: kABAddressStateKey]),
+                            str([value objectForKey: kABAddressZIPKey]),
+                            abbrev ? 1 : -1, kind, terminator);
+                    free((void *)kind);
                 }
-                printf("%s, %s %s %s (%.*s)%s",
-                        str([value objectForKey: kABAddressStreetKey]),
-                        str([value objectForKey: kABAddressCityKey]),
-                        str([value objectForKey: kABAddressStateKey]),
-                        str([value objectForKey: kABAddressZIPKey]),
-                        abbrev ? 1 : -1, kind, terminator);
-                free((void *)kind);
+            }
+            else if (field->property == kABSocialProfileProperty)
+            {
+                for (unsigned int j = 0; j < count; j++)
+                {
+                    NSDictionary *value = [field->value.multi valueAtIndex:j];
+
+                    if (label)       // multiple values
+                    {
+                        printf("%*s: ", width,
+                               str([value objectForKey: kABSocialProfileServiceKey]));
+                    }
+                    printf("%s%s",
+                            str([value objectForKey: kABSocialProfileUsernameKey]),
+                            terminator);
+                }
             }
             break;
         default:
