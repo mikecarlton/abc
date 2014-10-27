@@ -499,9 +499,12 @@ printField(Field *field, const char *label, int width, char *terminator,
             {
                 printf("%*s: ", width, label);
             }
-            printf("%s%s", str([field->value.date
-                         descriptionWithCalendarFormat: @"%A, %B %e, %Y"
-                         timeZone: nil locale: nil]), terminator);
+
+            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+            [formatter setDateFormat:@"EEEE, MMMM d, y"];
+
+            printf("%s%s", str([formatter stringFromDate:field->value.date]),
+                           terminator);
             break;
         case kABMultiStringProperty:
             count = [field->value.multi count];
