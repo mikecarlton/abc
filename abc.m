@@ -74,6 +74,8 @@ static Boolean emailGui = false;      // open gui email?
 static Boolean googleMapsGui = false; // open gui google maps?
 static Boolean mapsGui = false;       // open gui maps?
 static Boolean contactsGui = false;   // open gui address book?
+static Boolean dial = false;          // call on iphone?
+static const char *phoneLabel = NULL;  // label of phone number to dial
 static Boolean edit = false;          // gui address book in edit mode?
 
 static int listGroups = false;     // list all groups?
@@ -240,6 +242,29 @@ getValueWithLabel(ABMultiValue *multi, NSString *labelWanted)
 }
 
 /*
+ * returns value of first entry whose label contains case-insensitive substring
+ */
+static id
+getValueWithLabelSubstring(ABMultiValue *multi, NSString *labelWanted)
+{
+    id result = nil;
+    unsigned long count = [multi count];
+
+    for (unsigned int i = 0; i < count; i++)
+    {
+        if ([[multi labelAtIndex:i]
+                      rangeOfString: labelWanted
+                      options: NSCaseInsensitiveSearch].location != NSNotFound)
+        {
+            result = [multi valueAtIndex:i];
+            break;
+        }
+    }
+
+    return result;
+}
+
+/*
  * Format and return a formatted address
  * FIXME: use formattedAddressFromDictionary
  */
@@ -316,6 +341,27 @@ openURL(NSString *url)
 {
     // stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+}
+
+/*
+ * Call phone number with case-insenstive substring label on connected phone
+ */
+static void
+callOnConnectedPhone(ABPerson *person, const char *label)
+{
+    ABMultiValue *multi = [person valueForProperty:kABPhoneProperty];
+    NSString *phone = getValueWithLabelSubstring(multi,
+                                 [NSString stringWithCString:label
+                                           encoding: NSUTF8StringEncoding]);
+
+    if (phone)
+    {
+        openURL([NSString stringWithFormat:@"tel:%@", phone]);
+    }
+    else
+    {
+        fprintf(stderr, "Could not find a phone with label '%s'\n", label);
+    }
 }
 
 /*
@@ -827,7 +873,7 @@ sortBy(NSArray *unsorted, unsigned int numKeys, NSString *keys[])
 /*
  * Summarize program usage
  */
-static const char *options = ":spblrnaghuCEGMUHW";
+static const char *options = ":spblrnaghuCD:EGMUHW";
 static struct option longopts[] =
 {
      { "std",     no_argument,       NULL,           's' },
@@ -846,6 +892,7 @@ static struct option longopts[] =
      { "groups",  no_argument,       &listGroups,     1 },
 
      { "contacts", no_argument,       NULL,           'C' },
+     { "dial",     required_argument, NULL,           'D' },
      { "email",    no_argument,       NULL,           'E' },
      { "google",   no_argument,       NULL,           'G' },
      { "maps",     no_argument,       NULL,           'M' },
@@ -861,28 +908,29 @@ static void __attribute__ ((noreturn))
 usage(char *name)
 {
     static char *help[] = {
-      "  -s, --std      display records in standard form (default)",
-      "  -p, --plain    display records in plain (no labels) form",
-      "  -b, --brief    display records in brief form",
-      "  -l, --long     display records in long form",
-      "  -r, --raw      display records in raw form",
+      "  -s, --std        display records in standard form (default)",
+      "  -p, --plain      display records in plain (no labels) form",
+      "  -b, --brief      display records in brief form",
+      "  -l, --long       display records in long form",
+      "  -r, --raw        display records in raw form",
       "",
-      "  -a, --all      search all Person fields (default)",
-      "  -n, --name     search name fields only",
+      "  -a, --all        search all Person fields (default)",
+      "  -n, --name       search name fields only",
       // FIXME "  -g, --group    search group name only",
       "",
-      "  -h, --help     this help",
-      "  -u, --uid[=id] display unique ids; search for id if given",
+      "  -h, --help       this help",
+      "  -u, --uid[=id]   display unique ids; search for id if given",
       "",
-      "      --groups   list all groups",
+      "      --groups     list all groups",
       "",
-      "  -C, --contacts open Contacts with person",
-      "  -E, --email    open email application with message for person",
-      "  -G, --google   open google maps in browser to address of person",
-      "  -M, --maps     open Maps with address of person",
-      "  -U, --url      open browser with URL of person",
-      "  -H, --home     use 'home' values for gui",
-      "  -W, --work     use 'work' values for gui",
+      "  -C, --contacts   open Contacts with person",
+      "  -D, --dial=LABEL dial number with substring LABEL on connected phone",
+      "  -E, --email      open email application with message for person",
+      "  -G, --google     open google maps in browser to address of person",
+      "  -M, --maps       open Maps with address of person",
+      "  -U, --url        open browser with URL of person",
+      "  -H, --home       use 'home' values for gui",
+      "  -W, --work       use 'work' values for gui",
     };
 
     fprintf(stderr, "usage: %s [options] search term(s)\n", name);
@@ -921,6 +969,7 @@ int main(int argc, char * const argv[])
                 case 'a': searchFields = searchAll;   break;
 
                 case 'C': contactsGui = true; edit = false; break;
+                case 'D': dial = true; phoneLabel = optarg; break;
                 case 'E': emailGui = true;            break;
                 case 'M': mapsGui = true;             break;
                 case 'G': googleMapsGui = true;       break;
@@ -974,30 +1023,42 @@ int main(int argc, char * const argv[])
         ABPerson *person;
         while ((person = (ABPerson *)[addressEnum nextObject]))
         {
+            bool first_only = false;
+
             display(person, displayForm);
+            if (dial)
+            {
+                callOnConnectedPhone(person, phoneLabel);
+                first_only = true;
+            }
             if (contactsGui)
             {
                 openInContacts(person, edit);
-                break;
+                first_only = true;
             }
             if (urlGui)
             {
                 openInBrowser(person, label);
-                break;
+                first_only = true;
             }
             if (googleMapsGui)
             {
                 openInGoogleMapping(person, label);
-                break;
+                first_only = true;
             }
             if (mapsGui)
             {
                 openInMapping(person, label);
-                break;
+                first_only = true;
             }
             if (emailGui)
             {
                 openInEmail(person, label);
+                first_only = true;
+            }
+
+            if (first_only)
+            {
                 break;
             }
         }
