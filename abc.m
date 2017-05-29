@@ -203,10 +203,10 @@ str(NSString *ns)
  * Standard (Apple defined) labels come out of AB like this: _$!<Work>!$_
  * User-defined labels are unadorned, e.g. Account
  */
-static const char *
+static char *
 cleanLabel(const char *label)
 {
-    const char *kind;
+    char *kind;
 
     const char *start = index(label, '<');
     const char *end = rindex(label, '>');
@@ -268,7 +268,7 @@ getValueWithLabelSubstring(ABMultiValue *multi, NSString *labelWanted)
  * Format and return a formatted address
  * FIXME: use formattedAddressFromDictionary
  */
-static char *
+static NSString *
 formattedAddress(NSDictionary *value, bool url)
 {
     static char buffer[1024];
@@ -288,7 +288,7 @@ formattedAddress(NSDictionary *value, bool url)
         }
     }
 
-    return buffer;
+    return [NSString stringWithUTF8String: buffer];
 }
 
 /*
@@ -339,8 +339,9 @@ getPreferredProperty(ABPerson *person, NSString *property, Preferred label)
 static void
 openURL(NSString *url)
 {
+    NSURL *nsurl = [NSURL URLWithString:url];
     // stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+    [[NSWorkspace sharedWorkspace] openURL:nsurl];
 }
 
 /*
@@ -390,8 +391,8 @@ openInMappingProvider(ABPerson *person, Preferred label, const char *provider)
     if (address)
     {
         NSString *url = [NSString stringWithFormat:
-                            @"http://maps.%s.com/maps?q=%s",
-                            provider,
+                            @"http://maps.%@.com/maps?q=%@",
+                            [NSString stringWithUTF8String: provider],
                             formattedAddress(address, true)];
         openURL(url);
     }
@@ -440,8 +441,9 @@ openInEmail(ABPerson *person, Preferred label)
 static void
 openInContacts(ABPerson *person, Boolean edit)
 {
-    NSString *url = [NSString stringWithFormat:@"addressbook://%@%s",
-                            [person uniqueId], edit ? "?edit" : ""];
+    NSString *param = [NSString stringWithUTF8String: edit ? "?edit" : ""];
+    NSString *url = [NSString stringWithFormat:@"addressbook://%@%@",
+                              [person uniqueId], param];
 
     openURL(url);
 }
@@ -511,15 +513,15 @@ printField(Field *field, const char *label, int width, char *terminator,
             for (unsigned int j = 0; j < count; j++)
             {
                 const char *value = str([field->value.multi valueAtIndex:j]);
-                const char *kind = str([field->value.multi labelAtIndex:j]);
+                char const *kind = str([field->value.multi labelAtIndex:j]);
 
-                kind = cleanLabel(kind);    // returns a duplicate, must free
+                char *kind2 = cleanLabel(kind);   // returns a dup
                 if (label)      // if requested, label on 1st line only
                 {
                     printf("%*s: ", width, (j == 0) ? label : "");
                 }
-                printf("%s (%.*s)%s", value, abbrev ? 1 : -1, kind, terminator);
-                free((void *)kind);
+                printf("%s (%.*s)%s", value, abbrev ? 1 : -1, kind2, terminator);
+                free((void *)kind2);
             }
             break;
         case kABMultiDictionaryProperty:
@@ -532,7 +534,7 @@ printField(Field *field, const char *label, int width, char *terminator,
                     NSDictionary *value = [field->value.multi valueAtIndex:j];
                     const char *kind = str([field->value.multi labelAtIndex:j]);
 
-                    kind = cleanLabel(kind);  // returns a duplicate
+                    char *kind2 = cleanLabel(kind);   // returns a dup
                     if (label)      // if requested, label on 1st line only
                     {
                         printf("%*s: ", width, (j == 0) ? label : "");
@@ -542,8 +544,8 @@ printField(Field *field, const char *label, int width, char *terminator,
                             str([value objectForKey: kABAddressCityKey]),
                             str([value objectForKey: kABAddressStateKey]),
                             str([value objectForKey: kABAddressZIPKey]),
-                            abbrev ? 1 : -1, kind, terminator);
-                    free((void *)kind);
+                            abbrev ? 1 : -1, kind2, terminator);
+                    free((void *)kind2);
                 }
             }
             else if (field->property == kABSocialProfileProperty)
